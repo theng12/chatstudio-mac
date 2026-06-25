@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.5.0] — 2026-06-25
+
+### Added
+
+- **Paid cloud models — opt-in per provider.** Each provider's paid flagship models stay hidden until you flip **Enable paid models** for that provider in **Settings → Cloud providers**. The chat route also rejects paid models until enabled (HTTP 403), so nothing bills you by accident.
+  - OpenRouter: GPT-4o, GPT-4.1, Claude Sonnet 4.6, Claude Opus 4.8, Gemini 2.5 Pro, DeepSeek R1, Grok 4.3.
+  - Google Gemini: Gemini 2.5 Pro.
+  - Groq / Cerebras / NVIDIA: no separate paid list — their paid tiers just lift rate limits on the same (free-listed) models.
+- Each provider already shows a **Get key ↗** link to its API-key page (OpenRouter, NVIDIA, Groq, Cerebras, Gemini).
+
 ## [1.4.0] — 2026-06-25
 
 ### Added

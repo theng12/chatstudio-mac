@@ -466,7 +466,7 @@
       <!-- cloud providers -->
       <section class="card" x-show="providers.length > 0" x-cloak>
         <h3>Cloud providers</h3>
-        <p class="card-sub">Route chat requests to free hosted models. Pick a cloud model from the Chat tab's model dropdown — it shows a ☁ icon. Your API keys are stored locally in <code>settings.json</code> and never logged.</p>
+        <p class="card-sub">Route chat to hosted models. Free models show by default; flip <strong>Enable paid models</strong> to also use a provider's paid flagships (💲). Pick a cloud model from the Chat tab's dropdown (☁). Keys are stored locally in <code>settings.json</code> and never logged.</p>
         <template x-for="p in providers" :key="p.key">
           <div class="provider-row" style="border-top:1px solid var(--border); padding:14px 0;">
             <div class="card-row" style="margin-bottom:6px;">
@@ -491,11 +491,23 @@
             <p class="test-result" :class="(providerTests[p.key] || {}).ok ? 'ok' : 'err'"
                x-show="(providerTests[p.key] || {}).msg" x-cloak
                x-text="(providerTests[p.key] || {}).msg"></p>
+            <label class="card-row" x-show="p.has_paid" x-cloak
+                   style="gap:8px; margin-top:8px; cursor:pointer; font-size:13px; align-items:center;">
+              <input type="checkbox" :checked="p.paid_enabled"
+                     @change="setProviderPaid(p.key, $event.target.checked)">
+              <span>Enable paid models
+                <span class="muted small">— uses your paid <span x-text="p.name"></span> credits</span>
+              </span>
+            </label>
             <details style="margin-top:8px;">
               <summary class="muted small" style="cursor:pointer;">Show models</summary>
               <ul style="margin:6px 0 0 18px; font-size:12.5px; color:var(--muted);">
                 <template x-for="m in p.models" :key="m.repo">
-                  <li><strong x-text="m.label"></strong> <span class="faint" x-text="'· ' + m.notes"></span></li>
+                  <li x-show="m.free || p.paid_enabled">
+                    <strong x-text="m.label"></strong>
+                    <span class="chip warn" x-show="!m.free" x-cloak style="font-size:10px; padding:0 5px;">paid</span>
+                    <span class="faint" x-text="'· ' + m.notes"></span>
+                  </li>
                 </template>
               </ul>
             </details>

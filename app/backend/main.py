@@ -124,6 +124,10 @@ class ProviderKeyBody(BaseModel):
     api_key: Optional[str] = None
 
 
+class ProviderPaidBody(BaseModel):
+    enabled: bool = False
+
+
 class LoadModelBody(BaseModel):
     repo: str
 
@@ -321,6 +325,16 @@ def set_provider_key(name: str, body: ProviderKeyBody) -> dict:
     return {"ok": True, "providers": providers.public_view()}
 
 
+@app.post("/api/providers/{name}/paid")
+def set_provider_paid(name: str, body: ProviderPaidBody) -> dict:
+    """Opt in/out of a provider's paid models. When off, paid models are hidden
+    from the UI and rejected by the chat route."""
+    if name not in providers.PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
+    app_settings.set_provider_paid(name, body.enabled)
+    return {"ok": True, "providers": providers.public_view()}
+
+
 @app.post("/api/providers/{name}/test")
 async def test_provider_key(name: str, body: ProviderKeyBody) -> dict:
     if name not in providers.PROVIDERS:
@@ -480,6 +494,14 @@ async def chat_completions(body: ChatCompletionsBody):
         if not parsed:
             raise HTTPException(status_code=400, detail=f"Unknown provider repo: {body.repo}")
         provider, model = parsed
+        # Gate paid models: refuse unless the user enabled paid for this
+        # provider, so a paid model can't be used (and billed) by accident.
+        if not providers.model_allowed(provider, model):
+            raise HTTPException(
+                status_code=403,
+                detail=(f"{model.id} is a paid {provider.name} model. "
+                        f"Enable paid models for {provider.name} in Settings → Cloud providers first."),
+            )
         if body.stream:
             async def event_stream():
                 try:

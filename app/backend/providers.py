@@ -31,6 +31,7 @@ class CloudModel:
     id: str               # the model id the upstream API expects
     label: str            # human-friendly name for the UI
     notes: str = ""       # short tagline (context window, strengths, etc.)
+    free: bool = True      # False = paid; hidden until the provider's paid toggle is on
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,14 @@ OPENROUTER = Provider(
             "Llama 3.1 Nemotron 70B (free)",
             "NVIDIA-tuned Llama · strong reasoning",
         ),
+        # ── Paid (hidden until "Enable paid models" is on) ──
+        CloudModel("openai/gpt-4o", "GPT-4o", "OpenAI flagship · multimodal", free=False),
+        CloudModel("openai/gpt-4.1", "GPT-4.1", "OpenAI · strong coding + long context", free=False),
+        CloudModel("anthropic/claude-sonnet-4.6", "Claude Sonnet 4.6", "Anthropic workhorse · great coding", free=False),
+        CloudModel("anthropic/claude-opus-4.8", "Claude Opus 4.8", "Anthropic flagship · deepest reasoning", free=False),
+        CloudModel("google/gemini-2.5-pro", "Gemini 2.5 Pro", "Google flagship · long context", free=False),
+        CloudModel("deepseek/deepseek-r1", "DeepSeek R1", "Strong open reasoning model", free=False),
+        CloudModel("x-ai/grok-4.3", "Grok 4.3", "xAI flagship", free=False),
     ),
 )
 
@@ -216,6 +225,8 @@ GEMINI = Provider(
             "Gemini 2.5 Flash",
             "Proven stable Flash model",
         ),
+        # ── Paid (hidden until "Enable paid models" is on) ──
+        CloudModel("gemini-2.5-pro", "Gemini 2.5 Pro", "Most capable Gemini · deep reasoning", free=False),
     ),
 )
 
@@ -263,8 +274,24 @@ def parse_repo(repo: str) -> Optional[tuple[Provider, CloudModel]]:
     return p, CloudModel(id=model_id, label=model_id)
 
 
+def paid_enabled(key: str) -> bool:
+    """Whether the user has opted into this provider's paid models."""
+    return bool(app_settings.get_provider_paid(key))
+
+
+def model_allowed(provider: Provider, model: CloudModel) -> bool:
+    """Free models are always allowed; paid models only when the provider's
+    paid toggle is on. Guards the chat route so a paid model can't be used
+    (and billed) until explicitly enabled."""
+    return model.free or paid_enabled(provider.key)
+
+
 def public_view() -> list[dict]:
-    """Shape returned by GET /api/providers — never includes raw API keys."""
+    """Shape returned by GET /api/providers — never includes raw API keys.
+
+    Returns ALL models (free + paid) each tagged with `free`, plus per-provider
+    `has_paid` / `paid_enabled` so the UI can show free models by default and
+    reveal paid ones only after the toggle is enabled."""
     out = []
     for p in PROVIDERS.values():
         token = get_api_key(p.key)
@@ -275,8 +302,11 @@ def public_view() -> list[dict]:
             "docs_url": p.docs_url,
             "key_set": bool(token),
             "key_masked": _mask(token) if token else "",
+            "has_paid": any(not m.free for m in p.models),
+            "paid_enabled": paid_enabled(p.key),
             "models": [
-                {"id": m.id, "label": m.label, "notes": m.notes, "repo": repo_id(p.key, m.id)}
+                {"id": m.id, "label": m.label, "notes": m.notes, "free": m.free,
+                 "repo": repo_id(p.key, m.id)}
                 for m in p.models
             ],
         })

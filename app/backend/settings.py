@@ -24,7 +24,8 @@ _LOCK = threading.Lock()
 
 DEFAULTS: dict[str, Any] = {
     "hf_token": "",
-    "provider_keys": {},  # {"openrouter": "...", "nvidia": "..."}
+    "provider_keys": {},          # {"openrouter": "...", "nvidia": "..."}
+    "provider_paid_enabled": {},  # {"openrouter": true} — opt-in to paid models
 }
 
 _cache: dict[str, Any] = {}
@@ -98,6 +99,17 @@ def set_provider_key(name: str, token: Optional[str]) -> None:
     else:
         keys.pop(name, None)
     set_value("provider_keys", keys)
+
+
+def get_provider_paid(name: str) -> bool:
+    d = get("provider_paid_enabled")
+    return bool(d.get(name)) if isinstance(d, dict) else False
+
+
+def set_provider_paid(name: str, enabled: bool) -> None:
+    d = dict(get("provider_paid_enabled") or {})
+    d[name] = bool(enabled)
+    set_value("provider_paid_enabled", d)
 
 
 def serialize_public() -> dict:

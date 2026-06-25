@@ -143,14 +143,18 @@ function studio() {
         const clouds = [];
         for (const p of (prov.providers || [])) {
           for (const m of p.models) {
+            // Paid models stay hidden from the dropdown until the user enables
+            // paid for that provider.
+            if (!m.free && !p.paid_enabled) continue;
             clouds.push({
               repo: m.repo,
-              label: m.label,
+              label: m.label + (m.free ? '' : ' 💲'),
               source: 'cloud',
               provider: p.key,
               provider_name: p.name,
               notes: m.notes,
               key_set: p.key_set,
+              free: m.free,
             });
           }
         }
@@ -493,6 +497,18 @@ function studio() {
           this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || `HTTP ${d.status || "?"}`) };
         }
       } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
+    },
+    async setProviderPaid(name, enabled) {
+      try {
+        const r = await fetch(`${this.apiBase}/api/providers/${name}/paid`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        });
+        const d = await r.json();
+        if (r.ok) this.providers = d.providers || this.providers;
+      } catch (e) {}
+      // Refresh the chat dropdown so paid models appear/disappear immediately.
+      await this.refreshChatModels();
     },
 
     // generation settings persistence
