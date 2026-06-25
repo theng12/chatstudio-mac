@@ -283,6 +283,7 @@ function studio() {
         this.streamingText = "";
         this._abort = null;
         this.scrollThread();
+        this.$nextTick(() => { const el = this.$refs.composer; if (el) el.focus(); });
       }
     },
     finishAssistant(content, t0, stopped) {
