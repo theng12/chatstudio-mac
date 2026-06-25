@@ -25,13 +25,9 @@ from . import cache
 def _init_metal() -> None:
     """Ensure the Metal GPU stream is initialized on the calling thread.
     MLX Metal streams are thread-local — any thread that performs GPU ops
-    must initialize its own stream first. Safe to call multiple times (the
-    underlying mlx.core.metal.device_get_default() is idempotent per thread)."""
-    try:
-        import mlx.core as mx
-        mx.metal.device_get_default()
-    except Exception:
-        pass
+    must initialize its own stream first. Safe to call multiple times."""
+    import mlx.core as mx
+    mx.metal.device_get_default()
 
 
 def availability() -> dict:

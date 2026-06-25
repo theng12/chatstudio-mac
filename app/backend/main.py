@@ -416,6 +416,7 @@ async def chat_completions(body: ChatCompletionsBody):
 
             def producer():
                 try:
+                    llm_engine._init_metal()
                     for chunk in llm_engine.manager.stream_chat(
                         body.repo, messages, body.temperature, body.max_tokens, body.top_p,
                     ):
