@@ -80,16 +80,26 @@
       <div class="chatpage" style="flex:1; min-height:0;">
         <div class="chat-head">
           <div class="model-select">
-            <span class="muted small">Model</span>
+            <div class="seg modeltabs">
+              <button type="button" :class="{active: effectiveModelTab()==='local'}" @click="setModelTab('local')">🖥 Local</button>
+              <button type="button" :class="{active: effectiveModelTab()==='cloud'}" @click="setModelTab('cloud')">☁ Cloud</button>
+            </div>
             <select x-model="selectedRepo" @change="onPickModel()">
+              <template x-if="groupedModels().length === 0">
+                <option value="" disabled selected
+                        x-text="effectiveModelTab()==='cloud' ? 'No cloud models — add an API key in Settings' : 'No local models — download one'"></option>
+              </template>
               <template x-for="g in groupedModels()" :key="g.label">
                 <optgroup :label="g.label">
                   <template x-for="m in g.models" :key="m.repo">
-                    <option :value="m.repo" x-text="m.label"></option>
+                    <option :value="m.repo" :disabled="g.disabled" x-text="m.label"></option>
                   </template>
                 </optgroup>
               </template>
             </select>
+            <label class="showall-toggle" x-show="effectiveModelTab()==='cloud'" x-cloak title="Also show providers you haven't added a key for (greyed out)">
+              <input type="checkbox" x-model="showAllProviders"> show all
+            </label>
             <span class="load-state" :class="loadingModel ? 'loading' : (currentRepo===selectedRepo ? 'ok':'')">
               <span x-show="loadingModel" x-cloak>● loading…</span>
               <span x-show="!loadingModel && currentRepo===selectedRepo" x-cloak>● ready</span>

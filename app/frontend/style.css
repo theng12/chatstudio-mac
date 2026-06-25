@@ -184,12 +184,21 @@ button.link.danger:hover { background: rgba(255,107,107,.12); }
   padding: 12px 18px; border-bottom: 1px solid var(--border);
   background: rgba(12,24,28,.6);
 }
-.chat-head .model-select { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chat-head .model-select { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.modeltabs { flex: none; }
+.modeltabs button { padding: 5px 11px; font-size: 12px; }
+.showall-toggle {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  color: var(--muted); white-space: nowrap; cursor: pointer;
+}
+.showall-toggle input { accent-color: var(--accent); cursor: pointer; }
 .chat-head select {
   font: inherit; color: var(--text); background: var(--panel-2);
   border: 1px solid var(--border-2); border-radius: 9px;
   padding: 8px 12px; max-width: 360px; cursor: pointer;
 }
+.chat-head select option:disabled,
+.chat-head select optgroup[label$="needs key"] { color: var(--faint); }
 .load-state { font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .load-state.ok { color: var(--ok); }
 .load-state.loading { color: var(--warn); }

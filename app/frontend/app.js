@@ -33,6 +33,8 @@ function studio() {
     providerTests: {},
     liveModels: {},        // { providerKey: [{id, repo}] } fetched on demand
     liveLoading: null,
+    modelTab: null,        // 'local' | 'cloud' (null = auto-pick)
+    showAllProviders: false, // cloud tab: also show providers with no key (greyed)
     chatModels: [],
     currentRepo: null,
     selectedRepo: "",
@@ -184,22 +186,51 @@ function studio() {
         if (loaded) this.currentRepo = loaded.repo;
       } catch (e) {}
     },
-    // Dropdown groups: a "Local (MLX)" optgroup, then one optgroup per cloud
-    // provider — so the <select> shows a clear divider between local and cloud.
+    // Which picker tab is showing — explicit choice, else Local if any local
+    // models exist, else Cloud.
+    effectiveModelTab() {
+      if (this.modelTab) return this.modelTab;
+      return this.chatModels.some(m => m.source === 'local') ? 'local' : 'cloud';
+    },
+    // Optgroups for the model <select>, scoped to the active tab.
+    //  · Local tab → one "Local (MLX)" group.
+    //  · Cloud tab → one group per provider (so identical model names from
+    //    different providers stay distinguishable). Providers with no API key
+    //    are hidden unless "show all" is on, and then rendered greyed/disabled.
     groupedModels() {
-      const groups = [];
-      const locals = this.chatModels.filter(m => m.source === 'local');
-      if (locals.length) groups.push({ label: '🖥 Local (MLX)', models: locals });
+      const tab = this.effectiveModelTab();
+      if (tab === 'local') {
+        const locals = this.chatModels.filter(m => m.source === 'local');
+        return locals.length ? [{ label: '🖥 Local (MLX)', models: locals, disabled: false }] : [];
+      }
       const order = [];
       const byProv = {};
       for (const m of this.chatModels) {
         if (m.source !== 'cloud') continue;
         const k = m.provider || 'cloud';
-        if (!byProv[k]) { byProv[k] = { label: '☁ ' + (m.provider_name || 'Cloud'), models: [] }; order.push(k); }
+        if (!byProv[k]) {
+          byProv[k] = { label: '☁ ' + (m.provider_name || 'Cloud'), models: [], key_set: !!m.key_set };
+          order.push(k);
+        }
         byProv[k].models.push(m);
       }
-      for (const k of order) groups.push(byProv[k]);
+      const groups = [];
+      for (const k of order) {
+        const g = byProv[k];
+        g.disabled = !g.key_set;
+        if (g.disabled && !this.showAllProviders) continue;  // keyless hidden by default
+        if (g.disabled) g.label += ' — needs key';
+        groups.push(g);
+      }
       return groups;
+    },
+    // Switch tab; keep selection valid for what's now shown.
+    setModelTab(tab) {
+      this.modelTab = tab;
+      const selectable = this.groupedModels().flatMap(g => g.disabled ? [] : g.models);
+      if (!selectable.find(m => m.repo === this.selectedRepo)) {
+        this.selectedRepo = (selectable[0] && selectable[0].repo) || "";
+      }
     },
     async refreshSettings() {
       try { this.settings = await (await fetch(`${this.apiBase}/api/settings`)).json(); } catch (e) {}

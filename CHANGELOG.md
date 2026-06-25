@@ -10,6 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.8.0] — 2026-06-26
+
+### Changed
+
+- **Model picker is now tabbed — Local vs Cloud.** A one-click toggle switches between local MLX models and cloud models.
+- Cloud models stay **grouped per provider** (the same model name on different providers is kept distinct).
+- **Cloud providers without an API key are hidden by default** (shorter list); flip **show all** to reveal them, greyed-out and non-selectable, as a hint of what adding a key unlocks.
+
 ## [1.7.1] — 2026-06-26
 
 ### Changed
