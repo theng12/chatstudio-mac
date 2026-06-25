@@ -417,6 +417,24 @@
     <div class="container">
       <div class="page-head"><h1>Settings</h1></div>
 
+      <!-- uninterrupted mode -->
+      <section class="card">
+        <h3>Uninterrupted Mode</h3>
+        <p class="card-sub">Keep chatting even if a provider fails. When on, if your selected model errors (offline, rate-limited, overloaded, timed out, or no key), Chat Studio automatically retries the next provider in priority order — local MLX + your configured cloud providers.</p>
+        <label class="card-row" style="gap:8px; cursor:pointer; align-items:center;">
+          <input type="checkbox" x-model="settings.uninterrupted_mode" @change="saveUninterrupted()">
+          <span><strong>Enable auto-fallback</strong>
+            <span class="muted small" x-text="settings.uninterrupted_mode ? '— on' : '— off (use only the selected model)'"></span>
+          </span>
+        </label>
+        <div class="field" style="margin-top:12px; max-width:260px;">
+          <label>Request timeout <span class="val" x-text="(settings.request_timeout || 60) + 's'"></span></label>
+          <input type="range" min="10" max="180" step="5" x-model.number="settings.request_timeout" @change="saveUninterrupted()">
+          <p class="hint">If a provider sends no token within this time, fall back to the next one.</p>
+        </div>
+        <p class="hint">Answers show <em>via &lt;provider&gt;</em> (and “fell back” when a backup was used). Provider priority &amp; per-provider enable/disable are coming next.</p>
+      </section>
+
       <!-- default model -->
       <section class="card">
         <h3>Default model</h3>

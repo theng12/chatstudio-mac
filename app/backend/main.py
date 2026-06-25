@@ -36,7 +36,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub, providers
+from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router
 from .downloads import manager
 
 
@@ -114,6 +114,8 @@ class StartDownloadBody(BaseModel):
 
 class SettingsBody(BaseModel):
     hf_token: Optional[str] = None
+    uninterrupted_mode: Optional[bool] = None
+    request_timeout: Optional[int] = None
 
 
 class TokenTestBody(BaseModel):
@@ -287,6 +289,10 @@ def get_settings() -> dict:
 def update_settings(body: SettingsBody) -> dict:
     if body.hf_token is not None:
         app_settings.set_hf_token(body.hf_token)
+    if body.uninterrupted_mode is not None:
+        app_settings.set_uninterrupted(body.uninterrupted_mode)
+    if body.request_timeout is not None:
+        app_settings.set_request_timeout(body.request_timeout)
     return app_settings.serialize_public()
 
 
@@ -503,6 +509,41 @@ def chat_cancel() -> dict:
 @app.post("/api/chat/completions")
 async def chat_completions(body: ChatCompletionsBody):
     messages = [m.model_dump() for m in body.messages]
+
+    # ── Uninterrupted Mode: route through the auto-fallback router ──
+    if app_settings.get_uninterrupted():
+        params = {"temperature": body.temperature, "max_tokens": body.max_tokens, "top_p": body.top_p}
+        timeout = app_settings.get_request_timeout()
+        if body.stream:
+            async def uninterrupted_stream():
+                meta = None
+                async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout):
+                    t = ev.get("type")
+                    if t == "chunk":
+                        yield ev["text"]
+                    elif t == "done":
+                        meta = {"provider": ev["provider"], "model": ev["model"], "fallback": ev["fallback"]}
+                    elif t == "interrupted":
+                        meta = {"interrupted": True, "provider": ev["provider"]}
+                        yield f"\n[interrupted] {ev['detail']}"
+                    elif t == "error":
+                        yield f"\n[error] {ev.get('detail', 'generation failed')}"
+                # Trailing metadata sentinel — the UI strips this and shows which
+                # provider answered / whether it fell back.
+                if meta is not None:
+                    yield "\n__CHATSTUDIO_META__" + json.dumps(meta)
+            return StreamingResponse(uninterrupted_stream(), media_type="text/plain")
+        # non-streaming
+        text, meta = "", None
+        async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout):
+            t = ev.get("type")
+            if t == "chunk":
+                text += ev["text"]
+            elif t == "done":
+                meta = {"provider": ev["provider"], "model": ev["model"], "fallback": ev["fallback"]}
+            elif t in ("error", "interrupted"):
+                raise HTTPException(status_code=502, detail=ev.get("detail", "generation failed"))
+        return {"repo": body.repo, "content": text, "meta": meta}
 
     # Cloud provider routing — synthetic repo id `provider:<key>:<model_id>`.
     if body.repo.startswith("provider:"):

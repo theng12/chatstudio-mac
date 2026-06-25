@@ -386,13 +386,26 @@ function studio() {
         }
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
+        // Uninterrupted Mode appends a trailing "__CHATSTUDIO_META__{json}"
+        // sentinel saying which provider answered / whether it fell back.
+        // Strip it from the displayed text and parse it for the footer.
+        const MARK = "\n__CHATSTUDIO_META__";
+        let raw = "";
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
-          this.streamingText += decoder.decode(value, { stream: true });
+          raw += decoder.decode(value, { stream: true });
+          const mi = raw.indexOf(MARK);
+          this.streamingText = mi >= 0 ? raw.slice(0, mi) : raw;
           this.scrollThread();
         }
-        this.finishAssistant(this.streamingText, t0);
+        let providerMeta = null, finalText = raw;
+        const mi = raw.indexOf(MARK);
+        if (mi >= 0) {
+          try { providerMeta = JSON.parse(raw.slice(mi + MARK.length)); } catch (e) {}
+          finalText = raw.slice(0, mi);
+        }
+        this.finishAssistant(finalText, t0, false, providerMeta);
       } catch (e) {
         if (e && e.name === "AbortError") {
           this.finishAssistant(this.streamingText + " ⏹", t0, true);
@@ -407,11 +420,15 @@ function studio() {
         this.$nextTick(() => { const el = this.$refs.composer; if (el) el.focus(); });
       }
     },
-    finishAssistant(content, t0, stopped) {
+    finishAssistant(content, t0, stopped, providerMeta) {
       const secs = (performance.now() - t0) / 1000;
       const approxTok = Math.max(1, Math.round((content || "").length / 4));
       const tps = secs > 0 ? (approxTok / secs).toFixed(1) : "—";
-      const meta = `~${approxTok} tok · ${secs.toFixed(1)}s · ~${tps} tok/s` + (stopped ? " · stopped" : "");
+      let prefix = "";
+      if (providerMeta && providerMeta.provider) {
+        prefix = "via " + providerMeta.provider + (providerMeta.fallback ? " ⤵ fell back" : "") + " · ";
+      }
+      const meta = prefix + `~${approxTok} tok · ${secs.toFixed(1)}s · ~${tps} tok/s` + (stopped ? " · stopped" : "");
       if ((content || "").trim()) this.messages.push({ role: "assistant", content, meta });
     },
     stopGen() {
@@ -508,6 +525,16 @@ function studio() {
       });
       this.hfTokenInput = "";
       this.tokenTest = { ok: false, msg: "" };
+      await this.refreshSettings();
+    },
+    async saveUninterrupted() {
+      await fetch(`${this.apiBase}/api/settings`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          uninterrupted_mode: !!this.settings.uninterrupted_mode,
+          request_timeout: Number(this.settings.request_timeout) || 60,
+        }),
+      });
       await this.refreshSettings();
     },
     async testToken() {

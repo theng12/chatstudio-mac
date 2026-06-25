@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.9.0] — 2026-06-26
+
+### Added
+
+- **Uninterrupted Mode (Phase 1) — automatic provider fallback.** New **Settings → Uninterrupted Mode** toggle. When on, if your selected model fails — offline / connection refused, rate-limited (429), overloaded (5xx), timed out, model-not-loaded, missing key, empty response, or a stream that breaks *before* any text — Chat Studio automatically retries the next provider in priority order across **local MLX + your configured cloud providers**, with no user action. The reply footer shows **via &lt;provider&gt;** and notes when it **fell back**.
+  - Limits per the spec: 2 retries/provider, 5 attempts total, exponential backoff (1s/2s/4s), configurable request timeout (default 60s, time-to-first-token).
+  - New modular `router.py` (`LLMRouter.generate`) — a standalone service so Story Studio / batch jobs can reuse the same fallback logic. Structured request logging to stderr.
+
+> Coming in later phases: provider priority + per-provider enable/disable UI, health-status badges, a mid-stream **Continue with fallback** button (when a stream breaks *after* text), and the full test matrix.
+
 ## [1.8.0] — 2026-06-26
 
 ### Changed
