@@ -22,15 +22,18 @@ from typing import Iterator, Optional
 from . import cache
 
 
-def _init_metal() -> None:
+def _init_metal():
     """Ensure the Metal GPU stream is initialized on the calling thread.
     MLX Metal streams are thread-local — any thread that performs GPU ops
-    must initialize its own stream first. Safe to call multiple times."""
+    must initialize its own stream first. Safe to call multiple times.
+    Returns the thread-local stream so callers can wrap MLX work in
+    ``mx.stream(_init_metal())``."""
     import mlx.core as mx
     import sys
-    mx.new_thread_local_stream(mx.gpu)
-    print(f"[chat studio] _init_metal on thread {threading.current_thread().name}",
+    s = mx.new_thread_local_stream(mx.gpu)
+    print(f"[chat studio] _init_metal on thread {threading.current_thread().name}: {s}",
           file=sys.stderr, flush=True)
+    return s
 
 
 def availability() -> dict:
@@ -253,16 +256,18 @@ class LLMManager:
         # MLX Metal GPU streams are thread-local. If this method is called from
         # a background thread (as it is in the streaming endpoint), the Metal
         # context must be initialized explicitly on this thread.
-        _init_metal()
+        import mlx.core as mx
+        _s = _init_metal()
 
-        sampler = make_sampler(temp=temperature, top_p=top_p)
-        for response in stream_generate(
-            loaded.model, loaded.tokenizer, prompt,
-            max_tokens=max_tokens, sampler=sampler,
-        ):
-            text = getattr(response, "text", None)
-            if text:
-                yield text
+        with mx.stream(_s):
+            sampler = make_sampler(temp=temperature, top_p=top_p)
+            for response in stream_generate(
+                loaded.model, loaded.tokenizer, prompt,
+                max_tokens=max_tokens, sampler=sampler,
+            ):
+                text = getattr(response, "text", None)
+                if text:
+                    yield text
 
     def chat_once(
         self,

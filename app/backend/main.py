@@ -48,7 +48,19 @@ from .downloads import manager
 def _read_app_version() -> str:
     try:
         version_file = Path(__file__).resolve().parent.parent.parent / "VERSION"
-        return version_file.read_text().strip()
+        ver = version_file.read_text().strip()
+        git_dir = version_file.parent / ".git"
+        if git_dir.exists():
+            head = git_dir / "HEAD"
+            if head.exists():
+                ref = head.read_text().strip()
+                if ref.startswith("ref: "):
+                    ref_path = git_dir / ref[5:]
+                    if ref_path.exists():
+                        ver += "." + ref_path.read_text().strip()[:7]
+                else:
+                    ver += "." + ref[:7]
+        return ver
     except Exception:
         return "unknown"
 
