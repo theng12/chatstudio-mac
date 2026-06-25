@@ -42,6 +42,7 @@ class Provider:
     models: tuple[CloudModel, ...]
     env_var: str          # env var name (CHATSTUDIO_<KEY>_API_KEY) for override
     docs_url: str = ""
+    reuse_hf_token: bool = False   # fall back to the saved Hugging Face token (HF Router)
 
 
 OPENROUTER = Provider(
@@ -231,13 +232,65 @@ GEMINI = Provider(
 )
 
 
+HFROUTER = Provider(
+    key="hfrouter",
+    name="Hugging Face Router",
+    base_url="https://router.huggingface.co/v1",
+    env_var="CHATSTUDIO_HFROUTER_API_KEY",
+    docs_url="https://huggingface.co/settings/tokens",
+    reuse_hf_token=True,   # uses your saved HF token if no separate key is set
+    models=(
+        CloudModel("Qwen/Qwen3.5-9B", "Qwen3.5 9B", "Small + fast"),
+        CloudModel("Qwen/Qwen3.6-27B", "Qwen3.6 27B", "Strong mid-size generalist"),
+        CloudModel("deepseek-ai/DeepSeek-V4-Flash", "DeepSeek V4 Flash", "Fast DeepSeek"),
+        CloudModel("google/gemma-4-26B-A4B-it", "Gemma 4 26B (MoE)", "Efficient mixture-of-experts"),
+        CloudModel("zai-org/GLM-5.2", "GLM 5.2", "Strong open frontier model"),
+    ),
+)
+
+
+SAMBANOVA = Provider(
+    key="sambanova",
+    name="SambaNova",
+    base_url="https://api.sambanova.ai/v1",
+    env_var="CHATSTUDIO_SAMBANOVA_API_KEY",
+    docs_url="https://cloud.sambanova.ai/apis",
+    models=(
+        CloudModel("Meta-Llama-3.3-70B-Instruct", "Llama 3.3 70B", "Fast generalist"),
+        CloudModel("DeepSeek-V3.1", "DeepSeek V3.1", "Strong general chat"),
+        CloudModel("DeepSeek-V3.2", "DeepSeek V3.2", "Latest DeepSeek V3"),
+        CloudModel("gpt-oss-120b", "GPT-OSS 120B", "OpenAI's open model"),
+        CloudModel("gemma-4-31B-it", "Gemma 4 31B", "Google's 31B instruct"),
+        CloudModel("MiniMax-M2.7", "MiniMax M2.7", "MiniMax frontier model"),
+    ),
+)
+
+
+GITHUB = Provider(
+    key="github",
+    name="GitHub Models",
+    base_url="https://models.github.ai/inference",
+    env_var="CHATSTUDIO_GITHUB_API_KEY",
+    docs_url="https://github.com/settings/tokens",
+    models=(
+        CloudModel("openai/gpt-4o-mini", "GPT-4o mini", "Fast OpenAI model"),
+        CloudModel("openai/gpt-4.1", "GPT-4.1", "Strong coding + long context"),
+        CloudModel("openai/o4-mini", "o4-mini", "OpenAI reasoning"),
+        CloudModel("meta/llama-3.3-70b-instruct", "Llama 3.3 70B", "Open generalist"),
+        CloudModel("deepseek/deepseek-r1", "DeepSeek R1", "Open reasoning"),
+        CloudModel("microsoft/phi-4", "Phi-4", "Small + capable"),
+    ),
+)
+
+
 PROVIDERS: dict[str, Provider] = {
-    p.key: p for p in (OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI)
+    p.key: p for p in (OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI, HFROUTER, SAMBANOVA, GITHUB)
 }
 
 
 def get_api_key(key: str) -> Optional[str]:
-    """Env var wins, then settings.json. Returns the trimmed key or None."""
+    """Env var wins, then settings.json, then (for HF Router) the saved
+    Hugging Face token. Returns the trimmed key or None."""
     p = PROVIDERS.get(key)
     if not p:
         return None
@@ -245,7 +298,13 @@ def get_api_key(key: str) -> Optional[str]:
     if env:
         return env
     stored = (app_settings.get_provider_key(key) or "").strip()
-    return stored or None
+    if stored:
+        return stored
+    # HF Router authenticates with a Hugging Face token — reuse the one the
+    # user already saved for downloads so they don't enter it twice.
+    if p.reuse_hf_token:
+        return app_settings.get_hf_token()
+    return None
 
 
 def repo_id(key: str, model_id: str) -> str:
@@ -302,6 +361,7 @@ def public_view() -> list[dict]:
             "docs_url": p.docs_url,
             "key_set": bool(token),
             "key_masked": _mask(token) if token else "",
+            "reuse_hf_token": p.reuse_hf_token,
             "has_paid": any(not m.free for m in p.models),
             "paid_enabled": paid_enabled(p.key),
             "models": [

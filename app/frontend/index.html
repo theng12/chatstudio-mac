@@ -491,6 +491,7 @@
             <p class="test-result" :class="(providerTests[p.key] || {}).ok ? 'ok' : 'err'"
                x-show="(providerTests[p.key] || {}).msg" x-cloak
                x-text="(providerTests[p.key] || {}).msg"></p>
+            <p class="hint" x-show="p.reuse_hf_token && !p.key_set" x-cloak style="margin:6px 0 0;">Leave blank to use your saved Hugging Face token.</p>
             <label class="card-row" x-show="p.has_paid" x-cloak
                    style="gap:8px; margin-top:8px; cursor:pointer; font-size:13px; align-items:center;">
               <input type="checkbox" :checked="p.paid_enabled"

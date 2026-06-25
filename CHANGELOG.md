@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.6.0] — 2026-06-26
+
+### Added
+
+- Three more cloud providers (free models verified against each one's live model list):
+  - **Hugging Face Router** — `router.huggingface.co/v1`; **reuses your saved Hugging Face token** automatically (leave the key field blank).
+  - **SambaNova** — `api.sambanova.ai/v1`.
+  - **GitHub Models** — `models.github.ai/inference` (free with a fine-grained GitHub PAT that has Models read).
+- Each provider shows a **Get key ↗** link to its signup/key page; env overrides `CHATSTUDIO_HFROUTER_API_KEY` / `CHATSTUDIO_SAMBANOVA_API_KEY` / `CHATSTUDIO_GITHUB_API_KEY` documented in `ENVIRONMENT`.
+
 ## [1.5.0] — 2026-06-25
 
 ### Added

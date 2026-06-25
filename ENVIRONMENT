@@ -33,9 +33,15 @@ CHATSTUDIO_HF_TOKEN=
 #   Groq        https://console.groq.com/keys
 #   Cerebras    https://cloud.cerebras.ai
 #   Gemini      https://aistudio.google.com/apikey
+#   HF Router   https://huggingface.co/settings/tokens  (reuses CHATSTUDIO_HF_TOKEN if blank)
+#   SambaNova   https://cloud.sambanova.ai/apis
+#   GitHub      https://github.com/settings/tokens  (fine-grained PAT with "Models" read)
 ##########################################################################
 CHATSTUDIO_OPENROUTER_API_KEY=
 CHATSTUDIO_NVIDIA_API_KEY=
 CHATSTUDIO_GROQ_API_KEY=
 CHATSTUDIO_CEREBRAS_API_KEY=
 CHATSTUDIO_GEMINI_API_KEY=
+CHATSTUDIO_HFROUTER_API_KEY=
+CHATSTUDIO_SAMBANOVA_API_KEY=
+CHATSTUDIO_GITHUB_API_KEY=
