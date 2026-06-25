@@ -1,0 +1,2899 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<script src="/hotkeys.min.js"></script>
+<script src="/ace/ace.js"></script>
+<script src="/noty.js"></script>
+<script src="/notyq.js"></script>
+<script src="/xterm.js"></script>
+<script src="/xterm-inline-bridge.js"></script>
+<script src="/xterm-addon-fit.js"></script>
+<script src="/xterm-addon-web-links.js"></script>
+<script src="/xterm-theme.js"></script>
+<script src="/xterm-addon-search.js"></script>
+<script src="/xterm-addon-search-bar.js"></script>
+<script src="/sweetalert2.js"></script>
+<script src="/Socket.js"></script>
+<script src="/resizeSync.js"></script>
+<script src="/terminal_input_tracker.js"></script>
+<script src="/terminal_input_utils.js"></script>
+<script src="/terminal_key_caption.js"></script>
+<script src="/terminal-settings.js"></script>
+<script src="/pinokio-touch.js"></script>
+<script src="/common.js"></script>
+<script src="/run-task-save.js"></script>
+<script src="/he.js"></script>
+<script src="/opener.js"></script>
+<script src="/loading.js"></script>
+
+<script src="/autoexpand.js"></script>
+<script src="/modalinput.js"></script>
+<script src="/htmlmodal.js"></script>
+<script src="/simplemodal.js"></script>
+<script src="/waitmodal.js"></script>
+<script src="/notifyinput.js"></script>
+<script src="/report.js"></script>
+<script src="/mark.min.js"></script>
+<script src="/dropzone-min.js"></script>
+<script>
+(() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "")
+    const isEventPanel = params.get("__pinokio_event_panel") === "1" || params.has("__desktop_event")
+    window.__pinokioEventPanel = isEventPanel
+    if (isEventPanel) {
+      document.documentElement.classList.add("pinokio-event-panel")
+    }
+  } catch (_) {}
+})()
+</script>
+<link href="/xterm.min.css" rel="stylesheet" />
+<link href="/css/fontawesome.min.css" rel="stylesheet">
+<link href="/css/solid.min.css" rel="stylesheet">
+<link href="/css/regular.min.css" rel="stylesheet">
+<link href="/css/brands.min.css" rel="stylesheet">
+<link href="/style.css" rel="stylesheet"/>
+<link href="/noty.css" rel="stylesheet"/>
+<link href="/dropzone.css" rel="stylesheet"/>
+<link href="/urldropdown.css" rel="stylesheet"/>
+
+<style>
+html {
+  scroll-behavior: smooth;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#table > table {
+  border-left: 2px solid black;
+  padding-left: 5px;
+  margin: 10px 0;
+}
+.highlight {
+  background: yellow;
+  width: 100px;
+}
+th {
+  background: rgba(0,0,0,0.1);
+  padding: 10px;
+  font-size: 12px;
+}
+td {
+  font-size: 12px;
+  padding: 10px;
+}
+td.val {
+  background: rgba(0,0,0,0.06);
+}
+td.key {
+  background: rgba(0,0,0,0.1);
+}
+.button {
+  cursor: pointer; 
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+header.navheader2 {
+  position: relative;
+  padding: 10px 0;
+}
+.navheader2 .runner .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 22px;
+  padding: 0 8px !important;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(60, 67, 92, 0.96), rgba(49, 55, 78, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.96);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  box-sizing: border-box;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.navheader2 .runner .btn:hover {
+  border-color: rgba(111, 143, 255, 0.32);
+  background: linear-gradient(180deg, rgba(67, 74, 101, 0.98), rgba(55, 62, 86, 0.98));
+}
+.navheader2 .runner .btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 113, 174, 0.2), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.navheader2 .runner .btn:active {
+  transform: translateY(1px);
+}
+.navheader2 .runner .run > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+body.dark .navheader2 .runner .btn {
+  border-color: rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.07));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+body.dark .navheader2 .runner .btn:hover {
+  border-color: rgba(111, 143, 255, 0.28);
+  background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.1));
+}
+.protection-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.protection-toggle.is-saving {
+  opacity: 0.7;
+  cursor: wait;
+}
+.protection-toggle:focus-visible {
+  outline: none;
+}
+.protection-toggle-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.protection-toggle-icon-wrap {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(126, 155, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(126, 155, 255, 0.14);
+  flex-shrink: 0;
+}
+.protection-toggle-icon {
+  color: #89a6ff;
+  font-size: 10px;
+}
+.protection-toggle-label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.protection-toggle-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.84);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.protection-toggle-switch {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+  flex-shrink: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.protection-toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.94);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.22);
+  transition: transform 0.2s ease;
+}
+.protection-toggle[aria-checked="true"] .protection-toggle-switch::after {
+  transform: translateX(10px);
+}
+.protection-toggle[aria-checked="false"] .protection-toggle-switch::after {
+  transform: translateX(0);
+}
+.protection-toggle[aria-checked="true"] .protection-toggle-state {
+  background: rgba(111, 143, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(111, 143, 255, 0.18);
+  color: #e2eaff;
+}
+.protection-toggle[aria-checked="true"] .protection-toggle-switch {
+  background: rgba(111, 143, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(111, 143, 255, 0.34);
+}
+.protection-toggle[aria-checked="false"] .protection-toggle-icon-wrap {
+  background: rgba(217, 119, 6, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.2);
+}
+.protection-toggle[aria-checked="false"] .protection-toggle-icon {
+  color: #f0ba61;
+}
+.protection-toggle[aria-checked="false"] .protection-toggle-state {
+  background: rgba(217, 119, 6, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.2);
+  color: #f7ca81;
+}
+.protection-toggle[aria-checked="false"] .protection-toggle-switch {
+  background: rgba(217, 119, 6, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.24);
+}
+@media (max-width: 640px) {
+  .navheader2 .runner .btn {
+    height: 22px;
+    padding: 0 8px !important;
+    border-radius: 3px;
+  }
+  .protection-toggle-copy {
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navheader2 .runner .btn,
+  .protection-toggle,
+  .protection-toggle-switch,
+  .protection-toggle-switch::after {
+    transition: none;
+  }
+}
+.button:hover {
+  
+}
+.terminal {
+  box-sizing: border-box;
+}
+.xterm .xterm-viewport {
+  width: initial !important;
+}
+#terminal {
+  position: relative;
+}
+.terminal-drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+  padding: 12px;
+  z-index: 5;
+}
+.terminal-drop-overlay.active {
+  opacity: 1;
+}
+/*
+.navheader {
+  background: var(--dark-bg);
+}
+*/
+/*
+.btn {
+  background: royalblue;
+}
+*/
+#status-window {
+  /*
+  flex-grow: 1;
+  text-align: right;
+  */
+  padding: 0 10px;
+  font-size: 12px;
+}
+#status-window strong {
+  color: royalblue;
+}
+#status-window b {
+  color: black;
+  font-weight: normal;
+}
+body.dark #status-window b {
+  color: white;
+}
+#progress-window {
+  flex-shrink: 0;
+  width: 100px;
+  background: #eee;
+  height: 15px;
+  /*
+  border-radius: 5px;
+  */
+  overflow: hidden;
+}
+#progress-bar {
+  width: 0%;
+  height: 100%;
+  background: royalblue;
+  transition: width 0.2s;
+}
+html.pinokio-event-panel .runner > *:not(.run) {
+  display: none !important;
+}
+html.pinokio-event-panel .terminal-runner-utilities {
+  display: none !important;
+}
+html.pinokio-event-panel .runner {
+  gap: 8px;
+}
+#del-bin {
+  color: royalblue;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0 5px;
+  text-decoration: underline;
+}
+body.frozen {
+  overflow: auto !important;
+}
+body.has-full-navbar .navheader2 {
+  border-top: 1px solid var(--border-color);
+}
+body.has-full-navbar .navheader2 .runner {
+  padding-inline: 12px;
+}
+@media only screen and (max-width: 768px) {
+  body {
+    flex-direction: column !important;
+  }
+  body.has-full-navbar .navheader2 .runner {
+    padding-inline: 8px;
+  }
+}
+.ai-consent-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  justify-items: center;
+  align-items: center;
+  z-index: 2147483000;
+  padding: 16px;
+  background: rgba(9, 12, 18, 0.54);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.ai-consent-overlay.is-visible {
+  display: grid;
+}
+@media (max-height: 720px) {
+  .ai-consent-overlay {
+    align-items: start;
+  }
+}
+.ai-consent-modal {
+  --ai-consent-surface: rgba(255, 255, 255, 0.98);
+  --ai-consent-border: rgba(15, 23, 42, 0.12);
+  --ai-consent-shadow: 0 22px 56px rgba(15, 23, 42, 0.18);
+  --ai-consent-text: #111827;
+  --ai-consent-muted: rgba(17, 24, 39, 0.72);
+  --ai-consent-soft: rgba(17, 24, 39, 0.56);
+  --ai-consent-panel: rgba(15, 23, 42, 0.035);
+  --ai-consent-panel-border: rgba(15, 23, 42, 0.08);
+  --ai-consent-icon-fg: #d1a750;
+  --ai-consent-primary-bg: #161b26;
+  --ai-consent-primary-text: #f4d086;
+  --ai-consent-primary-border: rgba(15, 23, 42, 0.26);
+  --ai-consent-primary-hover: #0f1520;
+  --ai-consent-secondary-bg: rgba(15, 23, 42, 0.04);
+  --ai-consent-secondary-border: rgba(15, 23, 42, 0.12);
+  --ai-consent-secondary-hover: rgba(15, 23, 42, 0.08);
+  --ai-consent-link: #6c7ea5;
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  background: var(--ai-consent-surface);
+  color: var(--ai-consent-text);
+  border-radius: 18px;
+  border: 1px solid var(--ai-consent-border);
+  box-shadow: var(--ai-consent-shadow);
+  padding: 22px 22px 18px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  animation: ai-pop 160ms ease-out;
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.ai-consent-overlay * {
+  pointer-events: auto;
+}
+body.dark .ai-consent-modal {
+  --ai-consent-surface: rgba(9, 12, 18, 0.98);
+  --ai-consent-border: rgba(255, 255, 255, 0.1);
+  --ai-consent-shadow: 0 28px 72px rgba(0, 0, 0, 0.52);
+  --ai-consent-text: #f3f5fb;
+  --ai-consent-muted: rgba(232, 236, 246, 0.78);
+  --ai-consent-soft: rgba(232, 236, 246, 0.58);
+  --ai-consent-panel: rgba(255, 255, 255, 0.04);
+  --ai-consent-panel-border: rgba(255, 255, 255, 0.08);
+  --ai-consent-icon-fg: #f2d18b;
+  --ai-consent-primary-bg: #f2d18b;
+  --ai-consent-primary-text: #10151f;
+  --ai-consent-primary-border: rgba(242, 209, 139, 0.34);
+  --ai-consent-primary-hover: #f6dca7;
+  --ai-consent-secondary-bg: rgba(255, 255, 255, 0.05);
+  --ai-consent-secondary-border: rgba(255, 255, 255, 0.1);
+  --ai-consent-secondary-hover: rgba(255, 255, 255, 0.09);
+  --ai-consent-link: #9db1d8;
+}
+.ai-consent-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--ai-consent-panel);
+  border: 1px solid var(--ai-consent-panel-border);
+  color: var(--ai-consent-icon-fg);
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+.ai-consent-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.ai-consent-header .ai-consent-text {
+  flex: 1;
+}
+.ai-consent-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+.ai-consent-list {
+  margin: 0 0 16px;
+  padding: 12px 14px 12px 18px;
+  color: var(--ai-consent-muted);
+  line-height: 1.5;
+  border: 1px solid var(--ai-consent-panel-border);
+  border-radius: 12px;
+  background: var(--ai-consent-panel);
+}
+.ai-consent-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ai-consent-muted);
+}
+.ai-consent-list li {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.ai-consent-list li:last-child {
+  margin-bottom: 0;
+}
+.ai-consent-list strong {
+  color: var(--ai-consent-text);
+}
+.ai-consent-scope {
+  color: var(--ai-consent-text);
+  font-family: ui-monospace, "SFMono-Regular", SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+.ai-consent-remember {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ai-consent-muted);
+  margin-bottom: 14px;
+  padding-top: 2px;
+}
+.ai-consent-remember input {
+  margin-top: 2px;
+  accent-color: var(--ai-consent-primary-bg);
+}
+.ai-consent-remember-label {
+  line-height: 1.4;
+}
+.ai-consent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.ai-btn-primary,
+.ai-btn-secondary {
+  font: 600 14px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.ai-btn-primary {
+  background: var(--ai-consent-primary-bg);
+  color: var(--ai-consent-primary-text);
+  border-color: var(--ai-consent-primary-border);
+}
+.ai-btn-primary:hover {
+  background: var(--ai-consent-primary-hover);
+}
+.ai-btn-secondary {
+  background: var(--ai-consent-secondary-bg);
+  color: var(--ai-consent-text);
+  border-color: var(--ai-consent-secondary-border);
+}
+.ai-btn-secondary:hover {
+  background: var(--ai-consent-secondary-hover);
+}
+.ai-consent-manage {
+  margin-top: 10px;
+  background: none;
+  border: none;
+  color: var(--ai-consent-link);
+  font: 600 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  cursor: pointer;
+  padding: 0;
+  transition: color 120ms ease;
+}
+.ai-consent-manage:hover {
+  color: var(--ai-consent-text);
+}
+.ai-manage-sheet {
+  position: fixed;
+  inset: auto 12px 12px auto;
+  width: min(360px, 92vw);
+  background: #ffffff;
+  color: #0f1117;
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  border: 1px solid #e6e8ee;
+  padding: 14px 16px 12px;
+  z-index: 2147483001;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+body.dark .ai-manage-sheet {
+  background: #0f1117;
+  color: #eef1f8;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+.ai-manage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.ai-manage-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+#ai-manage-close {
+  border: none;
+  background: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: inherit;
+}
+.ai-manage-list {
+  max-height: 240px;
+  overflow: auto;
+}
+.ai-manage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f2f7;
+  font-size: 14px;
+}
+body.dark .ai-manage-item {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.ai-manage-item button {
+  background: none;
+  border: none;
+  color: #e14b4b;
+  cursor: pointer;
+  font-weight: 600;
+}
+.ai-manage-empty {
+  padding: 8px 0 4px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+.ai-manage-footer {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+@keyframes ai-pop {
+  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+</style>
+<link href="/terminal.css" rel="stylesheet"/>
+<script>
+let shell_id
+const formatUploadNotification = (files, sessionId, shellEmit, shellEmitAttempted) => {
+  if (!Array.isArray(files) || files.length === 0) {
+    return 'Upload complete (no files reported)'
+  }
+  const countLabel = files.length > 1 ? `${files.length} files attached` : 'File attached'
+  const sessionLabel = sessionId ? sessionId : '(unknown session)'
+  const summaries = files.map((file) => {
+    const name = file && (file.originalName || file.name || file.storedAs) ? (file.originalName || file.name || file.storedAs) : 'unknown'
+    const target = file && (file.cliRelativePath || file.displayPath || file.path) ? (file.cliRelativePath || file.displayPath || file.path) : ''
+    const summary = target ? `${name} → ${target}` : name
+    return summary.length > 180 ? `${summary.slice(0, 177)}…` : summary
+  })
+  let emitStatus
+  if (shellEmitAttempted) {
+    emitStatus = shellEmit ? 'Shell emit: delivered to terminal session' : 'Shell emit: failed – fallback used'
+  } else if (shellEmitAttempted === false) {
+    emitStatus = 'Shell emit: not attempted'
+  } else {
+    emitStatus = 'Shell emit: status unknown'
+  }
+  return `${countLabel}<br>Session: ${sessionLabel}<br>${emitStatus}<br>${summaries.join('<br>')}`
+}
+Dropzone.autoDiscover = false;
+function postMessageToAncestors(payload) {
+  if (!payload || typeof payload !== "object") {
+    return false
+  }
+  if (typeof window !== "undefined" && typeof window.PinokioBroadcastMessage === "function") {
+    try {
+      if (window.PinokioBroadcastMessage(payload, "*", window)) {
+        return true
+      }
+    } catch (_) {}
+  }
+  const targets = new Set()
+  try {
+    if (window.parent && window.parent !== window && typeof window.parent.postMessage === "function") {
+      targets.add(window.parent)
+    }
+  } catch (_) {}
+  try {
+    if (window.top && window.top !== window && typeof window.top.postMessage === "function") {
+      targets.add(window.top)
+    }
+  } catch (_) {}
+  let dispatched = false
+  targets.forEach((target) => {
+    try {
+      target.postMessage(payload, "*")
+      dispatched = true
+    } catch (_) {}
+  })
+  return dispatched
+}
+
+function buildBinaryRpcPayload(rpc, fileEntries) {
+  const metadata = {
+    rpc,
+    buffer_keys: fileEntries.map((entry) => entry.key)
+  }
+  const metaBytes = new TextEncoder().encode(JSON.stringify(metadata))
+  const separator = new Uint8Array([0])
+  const parts = [metaBytes, separator]
+  for (const entry of fileEntries) {
+    const lenBytes = new Uint8Array(4)
+    new DataView(lenBytes.buffer).setUint32(0, entry.buffer.byteLength)
+    parts.push(lenBytes, entry.buffer)
+  }
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0)
+  const combined = new Uint8Array(totalLength)
+  let offset = 0
+  for (const part of parts) {
+    combined.set(part, offset)
+    offset += part.length
+  }
+  return combined.buffer
+}
+const fallbackPreviewSanitizer = (value) => {
+  if (typeof value !== "string" || value.length === 0) {
+    return ""
+  }
+  return value.replace(/[\x00-\x1F\x7F]/g, "")
+}
+const sanitizePreviewLine = (value) => {
+  const sanitizer = (typeof window !== "undefined" && typeof window.PinokioSanitizePreviewLine === "function")
+    ? window.PinokioSanitizePreviewLine
+    : fallbackPreviewSanitizer
+  return sanitizer(value || "")
+}
+const formatConsentPath = (value) => {
+  if (!value) return "this app folder"
+  const normalized = value.replace(/\\/g, "/")
+  const marker = "/pinokio/api/"
+  const lower = normalized.toLowerCase()
+  const idx = lower.lastIndexOf(marker)
+  if (idx >= 0) {
+    const suffix = normalized.slice(idx + marker.length).replace(/^\/+/, "")
+    return `~/pinokio/api/${suffix}`
+  }
+  if (normalized.startsWith("~")) return normalized
+  return normalized
+}
+const getSafeLocalStorage = () => {
+  try {
+    const store = window.localStorage
+    const key = "__aiConsentTest__"
+    store.setItem(key, "1")
+    store.removeItem(key)
+    return store
+  } catch (_) {
+    return null
+  }
+}
+const createRunControls = () => {
+  const container = document.querySelector(".run")
+  const play = container ? container.querySelector(".play") : null
+  const starting = container ? container.querySelector(".starting") : null
+  const stop = container ? container.querySelector(".stop") : null
+  let currentState = "idle"
+  const set = (state) => {
+    currentState = state
+    if (!play || !starting || !stop) return
+    play.classList.toggle("hidden", state !== "idle")
+    starting.classList.toggle("hidden", state !== "starting")
+    stop.classList.toggle("hidden", state !== "running" && state !== "stopping")
+  }
+  const get = () => currentState
+  const isActive = () => currentState === "running" || currentState === "starting" || currentState === "stopping"
+  return { set, get, isActive }
+}
+const createProtectionControls = (options = {}) => {
+  const button = document.querySelector("[data-protection-toggle]")
+  const state = button ? button.querySelector("[data-protection-state]") : null
+  const appId = typeof options.appId === "string" ? options.appId.trim() : ""
+  const runControls = options.runControls || null
+  let enabled = options.initialEnabled === true
+  let saving = false
+  const showPopup = async (text) => {
+    window.alert(text)
+  }
+  const sync = () => {
+    if (!button) {
+      return
+    }
+    button.dataset.enabled = enabled ? "true" : "false"
+    button.setAttribute("aria-checked", enabled ? "true" : "false")
+    button.setAttribute("aria-busy", saving ? "true" : "false")
+    button.setAttribute("aria-label", enabled ? "Protection on" : "Protection off")
+    button.classList.toggle("is-saving", saving)
+    button.disabled = saving
+    if (state) {
+      state.textContent = enabled ? "On" : "Off"
+    }
+    button.title = enabled
+      ? "Blocks packages newer than 72 hours."
+      : "Skips Bluefairy for new runs."
+  }
+  const parseSaveError = async (response) => {
+    try {
+      const payload = await response.json()
+      if (payload && payload.error) {
+        return String(payload.error)
+      }
+    } catch (_) {}
+    return `Failed to update protection (${response.status})`
+  }
+  const save = async (nextEnabled) => {
+    if (!appId) {
+      enabled = nextEnabled !== false
+      sync()
+      return enabled
+    }
+    saving = true
+    sync()
+    try {
+      const response = await fetch(`/apps/preferences/${encodeURIComponent(appId)}`, {
+        method: "PUT",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          protection_enabled: nextEnabled !== false
+        })
+      })
+      if (!response.ok) {
+        throw new Error(await parseSaveError(response))
+      }
+      const payload = await response.json().catch(() => null)
+      enabled = payload && payload.preference
+        ? payload.preference.protection_enabled !== false
+        : (nextEnabled !== false)
+      return enabled
+    } finally {
+      saving = false
+      sync()
+    }
+  }
+  const apply = async (nextEnabled) => {
+    if (saving) {
+      return
+    }
+    const isRunning = runControls && typeof runControls.isActive === "function"
+      ? runControls.isActive()
+      : false
+    try {
+      if (isRunning) {
+        await showPopup("Stop the script before changing protection.")
+        sync()
+        return
+      }
+      await save(nextEnabled)
+    } catch (error) {
+      await showPopup(error && error.message ? error.message : "Failed to update protection.")
+      sync()
+    }
+  }
+  if (button) {
+    sync()
+    button.addEventListener("click", async (event) => {
+      event.preventDefault()
+      await apply(!enabled)
+    })
+  }
+  return {
+    getEnabled() {
+      return enabled
+    },
+    sync
+  }
+}
+const PLUGIN_TERMINAL_IDLE_WINDOW_MS = 1200
+const createPluginTerminalDiscoveryRefresher = (context = {}) => {
+  const enabled = (() => {
+    try {
+      return window.location.pathname.startsWith("/run/plugin/")
+        || (window.location.pathname.startsWith("/run/api/") && /\/pinokio\.js$/i.test(window.location.pathname))
+    } catch (_) {
+      return false
+    }
+  })()
+  let idleTimer = null
+  let armed = false
+  let sawStream = false
+  const clearIdleTimer = () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+  }
+  const refresh = () => {
+    if (!enabled || !armed || !sawStream) {
+      return
+    }
+    armed = false
+    sawStream = false
+    try {
+      const discovery = window.PinokioTerminalsDiscovery
+      if (!discovery || typeof discovery.refreshTerminalSessions !== "function") {
+        return
+      }
+      discovery.refreshTerminalSessions(window.location.href, context.cwd || "", {
+        retryDelays: []
+      })
+    } catch (_) {}
+  }
+  return {
+    arm(meaningful) {
+      if (!enabled || !meaningful) {
+        return
+      }
+      armed = true
+      sawStream = false
+      clearIdleTimer()
+    },
+    markActivity() {
+      if (!enabled || !armed) {
+        return
+      }
+      sawStream = true
+      clearIdleTimer()
+      idleTimer = setTimeout(() => {
+        idleTimer = null
+        refresh()
+      }, PLUGIN_TERMINAL_IDLE_WINDOW_MS)
+    },
+    clear() {
+      armed = false
+      sawStream = false
+      clearIdleTimer()
+    }
+  }
+}
+const createAiConsentManager = (context = {}) => {
+  const storage = getSafeLocalStorage()
+  const storageSupported = !!storage
+  const PREFIX = "pinokio:ai-consent:"
+  const extractCwdFromUri = (uri) => {
+    if (!uri || typeof uri !== "string") return ""
+    try {
+      const url = new URL(uri, window.location.origin)
+      const cwd = url.searchParams.get("cwd")
+      return cwd || ""
+    } catch (_) {
+      return ""
+    }
+  }
+  const normalizeSource = (value) => {
+    if (!value || typeof value !== "string") return ""
+    return value.trim().replace(/\\/g, "/").replace(/\/+$/, "")
+  }
+  const source = normalizeSource(context.folder || extractCwdFromUri(context.uri || ""))
+  const label = formatConsentPath(source)
+  const storageKey = source ? `${PREFIX}${encodeURIComponent(source)}` : null
+  const state = { overlay: null, manage: null }
+  const guessProviderLabel = () => {
+    const raw = (context.uri || "") + " " + (context.folder || "")
+    const lower = raw.toLowerCase()
+    const pattern = /\/plugin\/([^/]+)\/([^/]+)\/pinokio\.js/
+    const match = lower.match(pattern)
+    const candidate = match && match[2] ? match[2] : (match && match[1] ? match[1] : "")
+    if (!candidate) return ""
+    const clean = candidate.replace(/[-_]+/g, " ").trim()
+    if (!clean) return ""
+    return clean.split(/\s+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ")
+  }
+  const providerLabel = guessProviderLabel()
+
+  const listConsents = () => {
+    if (!storageSupported) return []
+    const items = []
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)
+      if (key && key.startsWith(PREFIX)) {
+        const decoded = decodeURIComponent(key.slice(PREFIX.length))
+        items.push({
+          key,
+          path: decoded,
+          label: formatConsentPath(decoded),
+        })
+      }
+    }
+    return items.sort((a, b) => a.label.localeCompare(b.label))
+  }
+  const remember = () => {
+    if (!storageSupported || !storageKey) return
+    storage.setItem(storageKey, source || "1")
+  }
+  const revoke = (key) => {
+    if (!storageSupported || !key) return
+    storage.removeItem(key)
+  }
+  const isRemembered = () => {
+    if (!storageSupported || !storageKey) return false
+    return storage.getItem(storageKey) !== null
+  }
+  const renderManageList = () => {
+    if (!state.manage) return
+    const listEl = state.manage.querySelector(".ai-manage-list")
+    if (!listEl) return
+    if (!storageSupported) {
+      listEl.innerHTML = `<div class="ai-manage-empty">Browser storage is unavailable, so permissions cannot be saved.</div>`
+      return
+    }
+    const entries = listConsents()
+    if (entries.length === 0) {
+      listEl.innerHTML = `<div class="ai-manage-empty">No saved permissions.</div>`
+      return
+    }
+    listEl.innerHTML = entries.map((entry) => {
+      return `
+        <div class="ai-manage-item">
+          <div class="ai-manage-path">${entry.label}</div>
+          <button type="button" data-ai-revoke="${entry.key}">Revoke</button>
+        </div>
+      `
+    }).join("")
+    listEl.querySelectorAll("[data-ai-revoke]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const targetKey = btn.getAttribute("data-ai-revoke")
+        revoke(targetKey)
+        renderManageList()
+      })
+    })
+  }
+  const ensureManageSheet = () => {
+    if (state.manage) return state.manage
+    const sheet = document.createElement("div")
+    sheet.className = "ai-manage-sheet"
+    sheet.hidden = true
+    sheet.innerHTML = `
+      <div class="ai-manage-header">
+        <h3>AI permissions</h3>
+        <button type="button" id="ai-manage-close">×</button>
+      </div>
+      <div class="ai-manage-list"></div>
+      <div class="ai-manage-footer">
+        <button class="ai-btn-secondary" id="ai-manage-clear">Clear all</button>
+      </div>
+    `
+    document.body.appendChild(sheet)
+    sheet.querySelector("#ai-manage-close")?.addEventListener("click", () => {
+      sheet.hidden = true
+    })
+    sheet.querySelector("#ai-manage-clear")?.addEventListener("click", () => {
+      if (storageSupported) {
+        listConsents().forEach((entry) => revoke(entry.key))
+      }
+      renderManageList()
+    })
+    state.manage = sheet
+    return sheet
+  }
+  const openManage = () => {
+    const sheet = ensureManageSheet()
+    renderManageList()
+    sheet.hidden = false
+  }
+  const ensureOverlay = () => {
+    if (state.overlay) return state.overlay
+    const overlay = document.createElement("div")
+    overlay.className = "ai-consent-overlay"
+    overlay.style.display = "none"
+    overlay.style.pointerEvents = "auto"
+    overlay.innerHTML = `
+      <div class="ai-consent-modal" role="dialog" aria-modal="true" aria-labelledby="ai-consent-title">
+        <div class="ai-consent-header">
+          <div class="ai-consent-icon" aria-hidden="true"><i class="fa-solid fa-shield-halved"></i></div>
+          <div class="ai-consent-text">
+            <h2 class="ai-consent-title" id="ai-consent-title"></h2>
+            <p class="ai-consent-desc"></p>
+          </div>
+        </div>
+        <ul class="ai-consent-list">
+          <li><strong>Will access:</strong> <span class="ai-consent-scope"></span></li>
+          <li><strong>Won't access:</strong> other folders</li>
+        </ul>
+        <label class="ai-consent-remember">
+          <input type="checkbox" id="ai-consent-remember">
+          <span class="ai-consent-remember-label"></span>
+        </label>
+        <div class="ai-consent-actions">
+          <button class="ai-btn-secondary" type="button" data-ai-consent-cancel>Cancel</button>
+          <button class="ai-btn-primary" type="button" data-ai-consent-next>Next</button>
+        </div>
+        <button class="ai-consent-manage" type="button" data-ai-consent-manage>Manage permissions</button>
+      </div>
+    `
+    document.body.appendChild(overlay)
+    state.overlay = overlay
+    return overlay
+  }
+  const prompt = () => new Promise((resolve) => {
+    if (!source) {
+      resolve({ allow: true, remember: false })
+      return
+    }
+    const overlay = ensureOverlay()
+    const title = overlay.querySelector(".ai-consent-title")
+    const desc = overlay.querySelector(".ai-consent-desc")
+    const scope = overlay.querySelector(".ai-consent-scope")
+    const rememberLabel = overlay.querySelector(".ai-consent-remember-label")
+    const rememberBox = overlay.querySelector("#ai-consent-remember")
+    const nextBtn = overlay.querySelector("[data-ai-consent-next]")
+    const cancelBtn = overlay.querySelector("[data-ai-consent-cancel]")
+    const manageBtn = overlay.querySelector("[data-ai-consent-manage]")
+
+    if (title) title.textContent = "Remote Network Access"
+    if (desc) {
+      const target = providerLabel || "a remote API"
+      desc.textContent = `This script may send files inside ${label} to ${target}.`
+    }
+    if (scope) scope.textContent = label
+    if (rememberLabel) rememberLabel.textContent = `Always allow for ${label}`
+    if (rememberBox) {
+      rememberBox.checked = storageSupported
+      rememberBox.disabled = !storageSupported
+    }
+
+    const close = () => {
+      overlay.classList.remove("is-visible")
+      setTimeout(() => {
+        overlay.style.display = "none"
+      }, 150)
+    }
+    const cleanup = () => {
+      nextBtn?.removeEventListener("click", onNext)
+      cancelBtn?.removeEventListener("click", onCancel)
+      manageBtn?.removeEventListener("click", onManage)
+      overlay.removeEventListener("click", onBackdrop)
+    }
+    const onNext = () => {
+      cleanup()
+      close()
+      const rememberChoice = rememberBox ? rememberBox.checked : false
+      resolve({ allow: true, remember: storageSupported && rememberChoice })
+    }
+    const onCancel = () => {
+      cleanup()
+      close()
+      resolve({ allow: false, remember: false })
+    }
+    const onManage = (event) => {
+      event.preventDefault()
+      openManage()
+    }
+    const onBackdrop = (event) => {
+      if (event.target === overlay) {
+        onCancel()
+      }
+    }
+
+    overlay.style.display = "grid"
+    requestAnimationFrame(() => overlay.classList.add("is-visible"))
+
+    nextBtn?.addEventListener("click", onNext)
+    cancelBtn?.addEventListener("click", onCancel)
+    manageBtn?.addEventListener("click", onManage)
+    overlay.addEventListener("click", onBackdrop)
+    if (nextBtn && typeof nextBtn.focus === "function") {
+      nextBtn.focus()
+    }
+  })
+  const ensureAllowed = async () => {
+    if (!source) return true
+    if (isRemembered()) {
+      return true
+    }
+    const result = await prompt()
+    if (!result || !result.allow) {
+      return false
+    }
+    if (result.remember) {
+      remember()
+    }
+    return true
+  }
+
+  return {
+    ensureAllowed,
+    showChipIfRemembered: () => {},
+    openManage,
+  }
+}
+document.addEventListener("DOMContentLoaded", async () => {
+  
+  
+  const n = new N()
+  const baseScriptId = null
+  const scriptUri = null
+  const scriptCwd = null
+  const scriptAction = "run"
+  const protectionAppId = "chatstudio-mac"
+  const initialProtectionEnabled = false
+  const shouldBypassAiConsent = () => {
+    const normalize = (value) => (typeof value === "string" ? value.replace(/\\/g, "/") : "")
+    const uri = normalize(scriptUri || "")
+    const pathname = normalize(window && window.location ? window.location.pathname : "")
+    if (uri.includes("/kernel/scripts/git/")) {
+      return true
+    }
+    if (/^\/run\/scripts\/git\//.test(pathname)) {
+      return true
+    }
+    return false
+  }
+  const aiConsentRequired = !shouldBypassAiConsent()
+  const consentManager = createAiConsentManager({
+    folder: scriptCwd,
+    uri: scriptUri || ("~" + location.pathname)
+  })
+  const runControls = createRunControls()
+  const pluginTerminalDiscoveryRefresher = createPluginTerminalDiscoveryRefresher({
+    cwd: scriptCwd
+  })
+  let rpc = null
+  const protectionControls = createProtectionControls({
+    appId: protectionAppId,
+    initialEnabled: initialProtectionEnabled,
+    runControls
+  })
+  consentManager.showChipIfRemembered()
+  class RPC {
+    constructor() {
+      this.socket = new Socket()
+      this.resizeSync = window.PinokioResizeSync.create({
+        socket: this.socket,
+        getShellId: () => shell_id
+      })
+      this.buffer = []
+      this.uploadContext = {
+        cwd: "~" + location.pathname
+      }
+      this.baseScriptId = baseScriptId
+      this.currentId = baseScriptId
+      this.pendingInput = []
+      this.inputBuffer = ""
+      this.inputTracker = window.TerminalInputTracker ? new window.TerminalInputTracker({
+        getFrameName: () => window.name || null,
+        getWindow: () => window
+      }) : null
+    }
+    flushPendingInput() {
+      if (!this.socket || !shell_id) {
+        return
+      }
+      while (this.pendingInput.length > 0) {
+        const chunk = this.pendingInput.shift()
+        if (typeof chunk !== "string" || chunk.length === 0) {
+          continue
+        }
+        this.socket.run({
+          key: chunk,
+          id: shell_id
+        })
+      }
+    }
+    resetInputBuffer() {
+      if (this.inputTracker) {
+        this.inputTracker.reset()
+        return
+      }
+      this.inputBuffer = ""
+    }
+    handleBackspace() {
+      if (this.inputTracker) {
+        this.inputTracker.handleBackspace()
+        return
+      }
+      if (this.inputBuffer.length > 0) {
+        this.inputBuffer = this.inputBuffer.slice(0, -1)
+      }
+    }
+    captureTextInput(text) {
+      if (this.inputTracker) {
+        this.inputTracker.capture(text)
+        return
+      }
+      if (typeof text !== "string" || text.length === 0) {
+        return
+      }
+      const normalized = text.replace(/\r/g, "\n")
+      const segments = normalized.split("\n")
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i]
+        const isLast = (i === segments.length - 1)
+        if (!isLast) {
+          const line = this.inputBuffer + segment
+          this.inputBuffer = ""
+          this.notifyLineSubmitted(line, { hadLineBreak: true })
+        } else {
+          this.inputBuffer += segment
+        }
+      }
+    }
+    notifyLineSubmitted(line, meta = {}) {
+      const safeLine = sanitizePreviewLine(line || "")
+      const preview = safeLine.trim()
+      const limit = 200
+      const truncated = preview.length > limit ? preview.slice(0, limit) + "..." : preview
+      const hadLineBreak = Boolean(meta && meta.hadLineBreak)
+      const meaningful = truncated.length > 0 || hadLineBreak
+      pluginTerminalDiscoveryRefresher.arm(meaningful)
+      if (this.inputTracker) {
+        this.inputTracker.submit(line, meta)
+        return
+      }
+      postMessageToAncestors({
+        type: "terminal-input",
+        frame: window.name || null,
+        line: truncated,
+        hasContent: meaningful
+      })
+    }
+    write(text) {
+      if (text !== "\u0007") {
+        this.term.write(text)
+      }
+      this.dirty = true
+    }
+    finished() {
+    /*
+      n.Noty({
+        text: `[Success] All steps complete`,
+      })
+      */
+      runControls.set("idle")
+    }
+    stop() {
+      if (runControls && typeof runControls.set === "function" && runControls.get() !== "idle") {
+        runControls.set("stopping")
+      }
+      const params = {
+        uri: scriptUri || ("~" + location.pathname)
+      }
+      const runId = this.currentId || this.baseScriptId
+      if (runId) {
+        params.id = runId
+      }
+      this.socket.run({
+        method: "kernel.api.stop",
+        params
+      }, (stream) => {
+      })
+    }
+    save() {
+      return new Promise((resolve, reject) => {
+        
+          let cwd = "~" + location.pathname
+        
+
+        this.socket.close()
+        this.socket.run({
+          method: "fs.write",
+          params: {
+            path: cwd,
+            text: str,
+//            string: str
+//            json: instructions
+          }
+        }, (packet) => {
+          if (packet.type === "result" && packet.id === "fs.write") {
+            dirty = false
+            document.querySelector("#save").classList.add("disabled")
+            resolve()
+          }
+        })
+      })
+    }
+    async start(mode) {
+//        await this.save()
+        this.socket.close()
+
+        const searchParams = new URLSearchParams(location.search)
+        let query = {}
+        const positionalArgs = searchParams.getAll("_")
+        if (positionalArgs.length > 0) {
+          query._ = positionalArgs
+        }
+        for (const [key, value] of searchParams.entries()) {
+          if (!key || key === "_" || key === "__pinokio_event_panel" || key === "__pinokio_event_run") {
+            continue
+          }
+          if (Object.prototype.hasOwnProperty.call(query, key)) {
+            if (Array.isArray(query[key])) {
+              query[key].push(value)
+            } else {
+              query[key] = [query[key], value]
+            }
+          } else {
+            query[key] = value
+          }
+        }
+
+        const eventRunToken = searchParams.get("__pinokio_event_run")
+        if (eventRunToken) {
+          const response = await fetch(`/pinokio/event/run/${encodeURIComponent(eventRunToken)}`, {
+            method: "GET",
+            headers: {
+              "Accept": "application/json"
+            }
+          })
+          if (!response.ok) {
+            throw new Error("Event payload not found or expired")
+          }
+          const runPayload = await response.json().catch(() => null)
+          const eventInput = runPayload && runPayload.input && typeof runPayload.input === "object"
+            ? runPayload.input
+            : {}
+          const merged = Object.assign({}, query, eventInput)
+          merged._ = Array.isArray(eventInput._)
+            ? eventInput._
+            : (Array.isArray(query._) ? query._ : [])
+          query = merged
+        }
+
+        const sessionValue = Array.isArray(query.session) ? query.session[0] : query.session
+        let runId = this.baseScriptId
+        if (typeof sessionValue === "string" && sessionValue.length > 0) {
+          const baseId = this.baseScriptId || (scriptUri || ("~" + location.pathname))
+          runId = `${baseId}&session=${sessionValue}`
+        }
+        this.currentId = runId || null
+
+        const payload = {
+          uri: scriptUri || ("~" + location.pathname),
+          mode,
+          protection_enabled: protectionControls.getEnabled(),
+          input: query,
+          client: {
+            cols: this.term.cols,
+            rows: this.term.rows,
+          }
+        }
+        if (scriptAction) {
+          payload.action = scriptAction
+        }
+        if (scriptCwd) {
+          payload.cwd = scriptCwd
+        }
+        if (runId) {
+          payload.id = runId
+          payload.useId = true
+        }
+        this.resizeSync.reset()
+        this.socket.run(payload, async (packet) => {
+          if (packet.type === 'start') {
+            refreshParent(packet)
+            reloadMemory()
+            runControls.set("running")
+            if (packet.data && packet.data.description) {
+              if ('current' in packet.data) {
+                document.querySelector("#status-window").innerHTML = `<b>
+                  <i class="fa-solid fa-circle-notch fa-spin"></i>(${packet.data.current+1}/${packet.data.total}) ${packet.data.title ? packet.data.title : ''}
+                </b>
+                <div class='flexible content'>${packet.data.description}</div>`
+              } else {
+                document.querySelector("#status-window").innerHTML = `<b>
+                  <i class="fa-solid fa-circle-notch fa-spin"></i> ${packet.data.title ? packet.data.title : ''}
+                </b>
+                <div class='flexible content'></div>`
+//                <div class='toggle-expand'>
+//                  <i class="fa-solid fa-circle-chevron-up"></i>
+//                </div>`
+              }
+            } else if (packet.data && packet.data.method) {
+              document.querySelector("#status-window").innerHTML = `<b>
+                <i class="fa-solid fa-circle-notch fa-spin"></i> (${packet.data.current+1}/${packet.data.total}) ${packet.data.method}
+              </b>`
+            }
+          } else if (packet.type === "stream") {
+            refreshParent(packet)
+            pluginTerminalDiscoveryRefresher.markActivity()
+            // set the current shell id
+            const previousShellId = shell_id
+            if (packet.data.id) {
+              shell_id = packet.data.id
+              this.flushPendingInput()
+            }
+            if (!previousShellId && shell_id) {
+              this.resizeSync.sendInitial()
+            }
+            if (packet.data.raw) {
+              this.write(packet.data.raw)
+            } else if (packet.data.json) {
+              this.write(JSON.stringify(packet.data.json).replace(/\n/g, "\r\n"))
+              this.write("\r\n")
+            } else if (packet.data.json2) {
+              this.write(JSON.stringify(packet.data.json2, null, 2).replace(/\n/g, "\r\n"))
+              this.write("\r\n")
+            }
+            if (packet.data.type === "emit2") {
+              // long text => still posting to the shell => show progress
+              document.querySelector("#status-window").innerHTML = `<strong>Pasting... (${Math.floor(100 * packet.data.i/packet.data.total)}%)</strong>`
+              let percent = Math.floor(100 * packet.data.i/packet.data.total)
+              document.querySelector("#progress-window").classList.remove("hidden")
+              document.querySelector("#progress-bar").style.width = "" + percent + "%";
+            } else {
+              document.querySelector("#status-window").innerHTML = "<b>Ready</b>"
+              document.querySelector("#progress-window").classList.add("hidden")
+              document.querySelector("#progress-bar").style.width = "0%"
+            }
+            runControls.set("running")
+          } else if (packet.type === 'disconnect') {
+            refreshParent(packet)
+            pluginTerminalDiscoveryRefresher.clear()
+            reloadMemory()
+            this.term.write("\r\nDisconnected...\r\n")
+            document.querySelector("#status-window").innerHTML = "<b>Ready</b>"
+            this.socket.close()
+            runControls.set("idle")
+            this.resizeSync.reset()
+
+            
+              if (this.error) {
+                return
+              }
+              
+            
+          } else if (packet.type === 'connect') {
+            if (packet.data) {
+              if (packet.data.shell) {
+                shell_id = packet.data.shell
+                this.flushPendingInput()
+              }
+              if (shell_id) {
+                this.resizeSync.sendInitial()
+              }
+              if (packet.data.state) {
+                this.write(packet.data.state)
+              }
+            }
+            /*
+            for(let i=0; i<message.length; i++) {
+              await new Promise((r, reject) => {
+                setTimeout(()=> {
+                  this.term.write(message[i])
+                  r()
+                }, 20)
+              })
+            }
+            */
+            runControls.set("running")
+          } else if (packet.type === 'resize') {
+            this.resizeSync.handleResizePacket(packet)
+//          } else if (packet.type === "key.set") {
+//            let keys = await fetch("/pinokio/keys").then((res) => {
+//              return res.json()
+//            })
+//            let input = await ModalInput({
+//              title: "Key",
+//              description: "select a key",
+//              form: [{
+//                key: "key",
+//                type: "select",
+//                items: keys,
+//              }, {
+//                key: "password",
+//                type: "password",
+//              }]
+//            })
+//            if (input) {
+//              this.socket.respond({
+//                response: input,
+//                uri: "~" + location.pathname,
+//              })
+//            }
+          } else if (packet.type === 'wait.end') {
+            try {
+              Swal.close()
+            } catch (e) {
+            }
+            this.socket.respond({
+              response: {},
+//              uri: "~" + location.pathname,
+              uri: packet.id
+            })
+          } else if (packet.type === 'wait') {
+            await WaitModal(packet.data)
+          } else if (packet.type === "htmlmodal") {
+            if (window.HtmlModal && typeof window.HtmlModal.handle === 'function') {
+              window.HtmlModal.handle(packet, this.socket)
+            }
+          } else if (packet.type === "modal") {
+            await SimpleModal(packet.data)
+            this.socket.respond({
+              response: {},
+              //uri: "~" + location.pathname,
+              uri: packet.id
+            })
+          } else if (packet.type === "loading.start") {
+            LoadingDialog.start(packet.data.message)
+            this.socket.respond({
+              response: {},
+              uri: packet.id
+            })
+          } else if (packet.type === "loading.end") {
+            LoadingDialog.end()
+            this.socket.respond({
+              response: {},
+              uri: packet.id
+            })
+          } else if (packet.type === "input") {
+            let params = packet.data
+            let type = (params.type ? params.type : "modal")
+            let input
+            if (type === "modal") {
+              input = await ModalInput(packet.data, packet.id)
+            } else if (type === "notify") {
+              input = await NotifyInput(packet.data, n)
+            }
+            if (input) {
+              if (input.constructor.name === "ArrayBuffer") {
+                this.socket.respond(input)
+              } else {
+                this.socket.respond({
+                  response: input,
+                  uri: packet.id
+  //                uri: "~" + location.pathname,
+  //                uri: (packet.caller ? packet.caller : packet.id)
+                })
+              }
+            }
+            /*
+              params := {
+                title,
+                description,
+                form: [{
+                  title,
+                  description
+                }]
+              }
+            */
+          } else if (packet.type === "tab.open") {
+            refreshParent(packet)
+          } else if (packet.type === "web.open") {
+          /*
+            {
+              "method": "web.open",
+              "params": {
+                "uri",
+                "target": "_self (default)"|"_blank"|"_parent"|"_top",
+                "features"
+              }
+            }
+            */
+
+            refreshParent()
+            let params = packet.data
+            open_url(params.uri, params.target, params.features)
+//            window.open(
+//              params.uri,
+//              (params.target || "_self"),
+//              params.features
+//            )
+          } else if (packet.type === "browser.open") {
+          /*
+            {
+              "method": "browser.open",
+              "params": {
+                "uri",
+                "target": "_self (default)"|"_blank"|"_parent"|"_top",
+                "features"
+              }
+            }
+            */
+
+///// DEPRECATE browser.open : Pinokio IS the browser. Everything opens in Pinokio. May bring back when necessary
+//            refreshParent()
+//            let params = packet.data
+//            window.open(
+//              params.uri,
+//              (params.target || "_self"),
+//              params.features
+//            )
+          } else if (packet.type === "browser.close") {
+            let params = packet.data
+            if (params && params.target) {
+              let targetWindow = window.open('', params.target)
+              if (targetWindow) {
+                targetWindow.close();
+              }
+            } else {
+              window.close()
+            }
+          } else if (packet.type === "browser") {
+          /*
+            {
+              "method": "browser.close"
+            }
+          */
+            let { method, params } = packet.data
+            let resolved = window
+            let tokens = method.split(".")
+            for(let token of tokens) {
+              resolved = resolved[token]
+            }
+            let result = resolved(...params)
+          } else if (packet.type === "notify") {
+          /*
+            {
+              html: <notification html>,
+              href: <link location to open>,
+              target: <target for window.open()>,
+              features: <windowFeatures>, ("self" => opens in pinokio)
+            }
+          */
+            if (packet.data) {
+              let payload = {}
+              if (packet.data.html) {
+                payload.text = packet.data.html
+              }
+              if (packet.data.type) {
+                payload.type = packet.data.type
+              }
+              payload.silent = packet.data.silent
+              payload.callbacks = {
+                onClick: () => {
+                  let params = packet.data
+                  if (params.href || params.uri) {
+                    window.open(
+                      params.uri || params.href,
+                      (params.target || "_self"),
+                      params.features
+                    )
+                  } else if (params.action === "close") {
+                    if (params && params.target) {
+                      let targetWindow = window.open('', params.target)
+                      if (targetWindow) {
+                        targetWindow.close();
+                      }
+                    } else {
+                      window.close()
+                    }
+                  }
+                }
+              }
+              n.Noty(payload)
+            }
+          } else if (packet.type === "restart") {
+            pluginTerminalDiscoveryRefresher.clear()
+            try {
+              if (window.parent && window.parent !== window && typeof window.parent.postMessage === "function") {
+                window.parent.postMessage(packet, "*")
+              }
+            } catch (_) {}
+          } else if (packet.type === "result") {
+            if (packet.id === "terminal.upload") {
+              const uploaded = Array.isArray(packet.data && packet.data.files) ? packet.data.files : []
+              console.log('[terminal.upload][terminal][result]', uploaded)
+              if (uploaded.length > 0) {
+                const mappedFiles = uploaded.map((file) => {
+                  const displayPath = file.displayPath || file.homeRelativePath ? `~/${(file.homeRelativePath || '').replace(/^\/+/, '')}` : (file.path || '')
+                  return {
+                    originalName: file.originalName || file.name || file.storedAs,
+                    storedAs: file.storedAs,
+                    path: file.path,
+                    displayPath,
+                    homeRelativePath: file.homeRelativePath || '',
+                    cliPath: file.cliPath || null,
+                    cliRelativePath: file.cliRelativePath || null
+                  }
+                })
+                refreshParent({
+                  type: "terminal.upload",
+                  files: mappedFiles
+                })
+                const shellEmit = packet.data && typeof packet.data.shellEmit === 'boolean' ? packet.data.shellEmit : undefined
+                const shellEmitAttempted = packet.data && typeof packet.data.shellEmitAttempted === 'boolean' ? packet.data.shellEmitAttempted : undefined
+                n.Noty({
+                  text: formatUploadNotification(mappedFiles, shell_id, shellEmit, shellEmitAttempted),
+                  timeout: 6000
+                })
+              } else {
+                refreshParent({
+                  type: "terminal.upload",
+                  files: []
+                })
+              }
+            }
+            refreshParent(packet)
+            reloadMemory()
+          } else if (packet.type === "info") {
+            n.Noty({
+              text: `${packet.data}`,
+            })
+          } else if (packet.type === "error") {
+            pluginTerminalDiscoveryRefresher.clear()
+
+
+            document.querySelector("#error-screen").classList.remove("hidden")
+            document.querySelector("#error-screen pre").textContent = packet.data
+            let instance = new Mark(document.querySelector("#error-screen pre"), {
+              separateWordSearch: false,
+              accuracy: "exactly"
+            })
+            /*
+            document.querySelector("#error-screen").addEventListener("click", (e) => {
+              document.querySelector("#error-screen").classList.add("hidden")
+            })
+            */
+            if (packet.event) {
+              instance.mark(packet.event)
+              let element = document.querySelector("#error-screen mark")
+              if (element) {
+                element.scrollIntoView({ behavior: "smooth", block: "center" })
+              }
+            }
+
+            this.error = true
+
+            this.stop()
+
+
+          } else if (packet.type === "event") {
+            if (packet.data === "stop") {
+              if (window.__pinokioEventPanel) {
+                postMessageToAncestors({
+                  e: "pinokio:event-panel-status",
+                  success: !this.error,
+                  status: "stopped"
+                })
+              }
+              document.querySelector("#status-window").innerHTML = "<b>Ready</b>"
+              setTimeout(() => {
+
+                let params = new URLSearchParams(location.search)
+                let entries = [...params.entries()]
+                let options;
+                if (entries.length > 0) {
+                  options = {}
+                  for(const [key, value] of entries) {
+                    options[key] = value;
+                  }
+                }
+                if (options && options.html) {
+                  n.Noty({
+                    text: options.html,
+                    timeout: 3000,
+                    callbacks: {
+                      onClose: () => {
+                        let uri = options.uri || options.href
+                        if (uri) {
+                          let target = options.target || "_self"
+                          let features = options.features
+                          window.open(uri, target, features)
+                        } else if (options.action === "close") {
+                          window.close()
+                        }
+                      }
+                    }
+                  })
+                }
+              
+              /*
+                n.Noty({
+                  text: '[Notice] finished',
+                  type: 'success'
+                })
+                */
+                pluginTerminalDiscoveryRefresher.clear()
+                runControls.set("idle")
+              }, 0)
+              //this.socket.close()
+            }
+          }
+
+          // Get the available space for the terminal
+//          let terminalContainer = document.querySelector("#terminal")
+//          const availableHeight = terminalContainer.clientHeight;
+//
+//          // Calculate the number of columns and rows the terminal should have
+//          console.log(this.term)
+//          //const rows = Math.floor(availableHeight / this.term._core.viewport._charSizeService.height);
+//          const rows = Math.floor(this.term._core.viewport._lastRecordedViewportHeight / this.term._core.viewport._charSizeService.height);
+//
+//
+//          // Resize the terminal
+//          this.term.resize(this.term.cols, rows);
+//          this.term.scrollToLine(this.term.rows-1);
+//          this.fit.fit()
+//          let pageBottom = document.querySelector("#end")
+//          pageBottom.scrollIntoView()
+        })
+    }
+    async run (mode) {
+      this.mode = (mode ? mode : "run")
+      const allowed = aiConsentRequired ? await consentManager.ensureAllowed() : true
+      if (!allowed) {
+        pluginTerminalDiscoveryRefresher.clear()
+        runControls.set("idle")
+        n.Noty({
+          text: "Run canceled; AI agents remain blocked for this folder.",
+          type: "warning",
+          timeout: 4000
+        })
+        return false
+      }
+      runControls.set("starting")
+      
+//      if (dirty) {
+//        await this.save()
+//        n.Noty({
+//          text: `script updated`,
+//        })
+//      }
+
+      
+      await this.createTerm(xtermTheme.FrontEndDelight)
+      
+      try {
+        await this.start(mode)
+        return true
+      } catch (error) {
+        pluginTerminalDiscoveryRefresher.clear()
+        runControls.set("idle")
+        const message = error && error.message ? error.message : "Failed to start"
+        n.Noty({
+          text: message,
+          type: "error",
+          timeout: 4000
+        })
+        return false
+      }
+    }
+    async uploadFiles(files, overlay) {
+      const localFiles = Array.isArray(files) ? files : []
+      if (localFiles.length === 0) {
+        return
+      }
+      if (!this.socket || !this.socket.ws || this.socket.ws.readyState !== WebSocket.OPEN) {
+        n.Noty({
+          text: "Terminal connection is not ready for uploads",
+          type: "error"
+        })
+        return
+      }
+      const entries = []
+      for (let i = 0; i < localFiles.length; i++) {
+        const file = localFiles[i]
+        if (!file || typeof file.arrayBuffer !== "function") {
+          continue
+        }
+        try {
+          const arrayBuffer = await file.arrayBuffer()
+          const key = `file_${Date.now()}_${i}_${Math.random().toString(16).slice(2, 8)}`
+          entries.push({
+            key,
+            name: file.name || `upload-${i + 1}`,
+            size: file.size,
+            type: file.type || "",
+            buffer: new Uint8Array(arrayBuffer)
+          })
+        } catch (error) {
+          console.error("Failed to read dropped file", error)
+        }
+      }
+      if (entries.length === 0) {
+        n.Noty({
+          text: "No readable files were dropped",
+          type: "error"
+        })
+        return
+      }
+      const rpcPayload = {
+        method: "terminal.upload",
+        params: {
+          id: shell_id,
+          cwd: this.uploadContext.cwd,
+          files: entries.map(({ key, name, size, type }) => ({ key, name, size, type }))
+        }
+      }
+      try {
+        if (overlay) {
+          overlay.classList.add("active")
+          overlay.textContent = "Uploading..."
+        }
+        await this.socket.sendBinary(buildBinaryRpcPayload(rpcPayload, entries))
+      } catch (error) {
+        console.error("Upload failed", error)
+        n.Noty({
+          text: `Upload failed: ${error.message}`,
+          type: "error"
+        })
+      } finally {
+        if (overlay) {
+          overlay.classList.remove("active")
+          overlay.textContent = "Drop files to upload"
+        }
+      }
+    }
+    async uploadRemoteResources(resources, overlay) {
+      const remoteItems = Array.isArray(resources) ? resources.filter((item) => item && typeof item.href === "string" && item.href.trim()) : []
+      if (remoteItems.length === 0) {
+        return
+      }
+      const payload = {
+        id: shell_id,
+        cwd: this.uploadContext.cwd,
+        urls: remoteItems
+      }
+      try {
+        if (overlay) {
+          overlay.classList.add("active")
+          overlay.textContent = "Downloading..."
+        }
+        const response = await fetch('/terminal/url-upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        const result = await response.json().catch(() => ({}))
+        const files = Array.isArray(result.files) ? result.files : []
+        const failures = Array.isArray(result.errors) ? result.errors : []
+        if (files.length > 0) {
+          const mappedFiles = files.map((file) => ({
+            originalName: file.originalName || file.name || file.storedAs,
+            storedAs: file.storedAs,
+            path: file.path,
+            displayPath: file.displayPath || file.path,
+            homeRelativePath: file.homeRelativePath || '',
+            cliPath: file.cliPath || null,
+            cliRelativePath: file.cliRelativePath || null
+          }))
+          try {
+            refreshParent({
+              type: "terminal.upload",
+              files: mappedFiles
+            })
+            if (typeof reloadMemory === 'function') {
+              reloadMemory()
+            }
+          } catch (_) {}
+          const shellEmit = typeof result.shellEmit === 'boolean' ? result.shellEmit : undefined
+          const shellEmitAttempted = typeof result.shellEmitAttempted === 'boolean' ? result.shellEmitAttempted : undefined
+          n.Noty({
+            text: formatUploadNotification(mappedFiles, shell_id, shellEmit, shellEmitAttempted),
+            timeout: 6000
+          })
+        }
+        if (failures.length > 0) {
+          const plural = failures.length > 1
+          n.Noty({
+            text: plural ? `${failures.length} remote files failed to download` : `Remote file failed to download`,
+            type: "error",
+            timeout: 5000
+          })
+        }
+      } catch (error) {
+        n.Noty({
+          text: `Remote upload failed: ${error.message}`,
+          type: "error"
+        })
+      } finally {
+        if (overlay) {
+          overlay.classList.remove("active")
+          overlay.textContent = "Drop files to upload"
+        }
+      }
+    }
+    async collectFilesFromDataTransfer(dataTransfer) {
+      if (!dataTransfer) {
+        return { urls: [] }
+      }
+      const resourceMap = new Map()
+      const ensureResource = (input, nameHint) => {
+        if (!input) {
+          return
+        }
+        let resolved
+        try {
+          resolved = new URL(input, window.location.href)
+        } catch (_) {
+          return
+        }
+        if (!resolved || !resolved.protocol || !/^https?:$/i.test(resolved.protocol)) {
+          return
+        }
+        const href = resolved.href
+        const existing = resourceMap.get(href)
+        if (existing) {
+          if (nameHint && !existing.nameHint) {
+            existing.nameHint = nameHint
+          }
+          return
+        }
+        resourceMap.set(href, { href, url: resolved, nameHint: nameHint || null })
+      }
+      const handleDownloadUrl = (value) => {
+        if (!value) {
+          return
+        }
+        const firstColon = value.indexOf(":")
+        const lastColon = value.lastIndexOf(":")
+        if (firstColon === -1 || lastColon === -1 || lastColon <= firstColon) {
+          ensureResource(value, null)
+          return
+        }
+        const filename = value.slice(firstColon + 1, lastColon)
+        const url = value.slice(lastColon + 1)
+        ensureResource(url, filename)
+      }
+      const handleStringEntry = (type, rawValue) => {
+        if (!rawValue) {
+          return
+        }
+        if (type === "DownloadURL") {
+          handleDownloadUrl(rawValue)
+          return
+        }
+        const value = rawValue.trim()
+        if (!value) {
+          return
+        }
+        if (type === "text/html") {
+          try {
+            const parser = new DOMParser()
+            const doc = parser.parseFromString(value, "text/html")
+            const anchors = doc.querySelectorAll("a[href]")
+            anchors.forEach((anchor) => {
+              const href = anchor.getAttribute("href")
+              const nameHint = anchor.getAttribute("download") || (anchor.textContent ? anchor.textContent.trim() : null)
+              ensureResource(href, nameHint)
+            })
+            const srcElements = doc.querySelectorAll("[src]")
+            srcElements.forEach((element) => {
+              const src = element.getAttribute("src")
+              if (!src) {
+                return
+              }
+              const title = element.getAttribute("download") || element.getAttribute("title") || element.getAttribute("alt") || null
+              ensureResource(src, title)
+            })
+          } catch (error) {
+            console.warn("Failed to parse dropped HTML for resources", error)
+          }
+          return
+        }
+        if (type === "text/x-moz-url") {
+          const parts = value.split(/\r?\n/)
+          const url = parts[0] ? parts[0].trim() : ""
+          const title = parts[1] ? parts[1].trim() : null
+          if (url) {
+            ensureResource(url, title)
+          }
+          return
+      }
+      const lines = value.split(/\r?\n/)
+      for (const line of lines) {
+        const candidate = line.trim()
+        if (!candidate || candidate.startsWith("#")) {
+          continue
+        }
+        let resolvedHref
+        try {
+          const resolved = new URL(candidate, window.location.href)
+          resolvedHref = resolved.href
+        } catch (_) {
+          continue
+        }
+        let decodedHref = resolvedHref
+        try {
+          decodedHref = decodeURIComponent(resolvedHref)
+        } catch (_) {}
+        if (/[<>"']/.test(decodedHref)) {
+          continue
+        }
+        ensureResource(resolvedHref, null)
+      }
+    }
+      const items = dataTransfer.items ? Array.from(dataTransfer.items) : []
+      const stringItems = items.filter((item) => item && item.kind === "string" && typeof item.getAsString === "function")
+      if (stringItems.length > 0) {
+        const stringValues = await Promise.all(stringItems.map((item) => new Promise((resolve) => {
+          try {
+            item.getAsString((value) => resolve({ type: item.type || "text/plain", value }))
+          } catch (_) {
+            resolve(null)
+          }
+        })))
+        for (const entry of stringValues) {
+          if (entry) {
+            handleStringEntry(entry.type, entry.value)
+          }
+        }
+      }
+      const fallbackTypes = ["DownloadURL", "text/uri-list", "text/plain", "text/html", "text/x-moz-url"]
+      if (typeof dataTransfer.getData === "function") {
+        for (const type of fallbackTypes) {
+          try {
+            const value = dataTransfer.getData(type)
+            if (value) {
+              handleStringEntry(type, value)
+            }
+          } catch (_) {}
+        }
+      }
+      const resources = Array.from(resourceMap.values())
+      if (!resources.length) {
+        return { urls: [] }
+      }
+      const urls = resources.map((resource) => {
+        const basePath = resource.url ? resource.url.pathname : new URL(resource.href).pathname
+        let filename = resource.nameHint || basePath.split("/").pop() || "download"
+        try {
+          filename = decodeURIComponent(filename)
+        } catch (_) {}
+        if (!filename) {
+          filename = "download"
+        }
+        return {
+          href: resource.href,
+          name: filename
+        }
+      })
+      return { urls }
+    }
+    async createTerm (_theme) {
+      if (!this.term) {
+        const theme = Object.assign({ }, _theme, {
+          selectionBackground: "red",
+          selectionForeground: "white"
+        })
+        
+        let config = {
+          scrollback: 9999999,
+          fontSize: 12,
+          fontFamily: 'monospace',
+          theme,
+          //theme: xtermTheme.FrontEndDelight
+          //theme: xtermTheme.Afterglow
+
+          //theme: xtermTheme.PencilLight
+
+          //theme: xtermTheme.Flatland
+          //theme: xtermTheme.OneHalfLight
+          //theme: xtermTheme.Piatto_Light
+          //theme: xtermTheme.Spring
+          //theme: xtermTheme.Terminal_Basic
+          //theme: xtermTheme.Tomorrow
+        }
+        let res = await fetch("/xterm_config").then((res) => {
+          return res.json()
+        })
+        if (res && res.config) {
+          config = res.config
+        }
+        const baseConfig = Object.assign({}, config)
+        if (window.PinokioTerminalSettings && typeof window.PinokioTerminalSettings.applyToConfig === 'function') {
+          config = window.PinokioTerminalSettings.applyToConfig(config)
+        }
+        const term = new Terminal(config)
+        if (window.PinokioTerminalSettings && typeof window.PinokioTerminalSettings.register === 'function') {
+          window.PinokioTerminalSettings.register(term, { baseConfig })
+        }
+        term.open(document.querySelector("#terminal"))
+        const terminalContainer = document.querySelector("#terminal")
+        const dropOverlay = document.createElement("div")
+        dropOverlay.className = "terminal-drop-overlay"
+        dropOverlay.textContent = "Drop files to upload"
+        terminalContainer.appendChild(dropOverlay)
+        window.PinokioTouch.bindTerminalFocus(term, terminalContainer)
+        const dedupeClipboardFiles = (inputs) => {
+          const seen = new Set()
+          const results = []
+          inputs.forEach((file) => {
+            if (!file || !(file instanceof File) || !(file.size > 0)) {
+              return
+            }
+            const signature = `${file.name || ''}::${file.size || 0}::${file.type || ''}`
+            if (seen.has(signature)) {
+              return
+            }
+            seen.add(signature)
+            results.push(file)
+          })
+          return results
+        }
+        const collectClipboardFiles = (clipboardData) => {
+          const files = []
+          const seen = new Set()
+          if (!clipboardData) {
+            return { files, hasFileFlavor: false }
+          }
+          let hasFileFlavor = false
+          try {
+            const types = Array.from(clipboardData.types || [])
+            hasFileFlavor = types.some((type) => type === "Files" || type === "application/x-moz-file")
+          } catch (_) {}
+          const pushIfUnique = (file) => {
+            if (!file || !(file instanceof File) || !(file.size > 0)) {
+              return
+            }
+            const key = `${file.name || ''}::${file.size || 0}::${file.type || ''}`
+            if (seen.has(key)) {
+              return
+            }
+            seen.add(key)
+            files.push(file)
+          }
+          try {
+            Array.from(clipboardData.files || []).forEach(pushIfUnique)
+          } catch (_) {}
+          try {
+            const items = clipboardData.items ? Array.from(clipboardData.items) : []
+            items.forEach((item) => {
+              if (!item || item.kind !== "file" || typeof item.getAsFile !== "function") {
+                return
+              }
+              try {
+                pushIfUnique(item.getAsFile())
+              } catch (_) {}
+            })
+          } catch (_) {}
+          return { files, hasFileFlavor }
+        }
+        const readClipboardFilesFallback = async () => {
+          if (!navigator.clipboard || typeof navigator.clipboard.read !== "function") {
+            return []
+          }
+          try {
+            const clipboardItems = await navigator.clipboard.read()
+            const collected = []
+            const seen = new Set()
+            let index = 0
+            for (const item of clipboardItems) {
+              if (!item || !Array.isArray(item.types)) {
+                index += 1
+                continue
+              }
+              const types = item.types
+              const preferredType = types.find((type) => type && !type.startsWith("text/"))
+                || types.find((type) => /^image\//i.test(type))
+                || types[0]
+              if (!preferredType) {
+                index += 1
+                continue
+              }
+              try {
+                const blob = await item.getType(preferredType)
+                if (!blob) {
+                  index += 1
+                  continue
+                }
+                let name = typeof item.name === "string" && item.name ? item.name : ""
+                if (!name) {
+                  const ext = preferredType && preferredType.includes("/") ? preferredType.split("/").pop() : ""
+                  const safeExt = ext ? ext.replace(/[^a-z0-9]/gi, "").toLowerCase() : ""
+                  name = `clipboard-${Date.now()}-${index}${safeExt ? `.${safeExt}` : ""}`
+                }
+                const file = blob instanceof File ? blob : new File([blob], name, {
+                  type: blob.type || preferredType,
+                  lastModified: Date.now()
+                })
+                const key = `${file.name || ''}::${file.size || 0}::${file.type || ''}`
+                if (seen.has(key)) {
+                  index += 1
+                  continue
+                }
+                seen.add(key)
+                collected.push(file)
+              } catch (error) {
+                if (error && error.name !== "NotAllowedError") {
+                  console.warn("Failed to extract clipboard blob", error)
+                }
+              }
+              index += 1
+            }
+            return collected
+          } catch (error) {
+            if (error && error.name !== "NotAllowedError") {
+              console.warn("navigator.clipboard.read() failed", error)
+            }
+            return []
+          }
+        }
+        const extractUrlsFromClipboard = (clipboardData) => {
+          const urls = []
+          if (!clipboardData) {
+            return urls
+          }
+          const seen = new Set()
+          const pushUrl = (href, nameHint) => {
+            if (!href) {
+              return
+            }
+            let resolved
+            try {
+              resolved = new URL(href, window.location.href)
+            } catch (_) {
+              try {
+                resolved = new URL(href)
+              } catch (_) {
+                return
+              }
+            }
+            if (!/^https?:$/i.test(resolved.protocol)) {
+              return
+            }
+            const key = resolved.href
+            if (seen.has(key)) {
+              return
+            }
+            seen.add(key)
+            urls.push({ href: resolved.href, name: nameHint || null })
+          }
+          let html = ""
+          let uriList = ""
+          if (typeof clipboardData.getData === "function") {
+            try { html = clipboardData.getData("text/html") || "" } catch (_) {}
+            try { uriList = clipboardData.getData("text/uri-list") || "" } catch (_) {}
+          }
+          if (uriList) {
+            uriList.split(/\r?\n/).forEach((line) => {
+              const trimmed = line.trim()
+              if (!trimmed || trimmed.startsWith("#")) {
+                return
+              }
+              pushUrl(trimmed, null)
+            })
+          }
+          if (html) {
+            try {
+              const parser = new DOMParser()
+              const doc = parser.parseFromString(html, "text/html")
+              doc.querySelectorAll("img[src]").forEach((img) => {
+                const src = img.getAttribute("src")
+                const nameHint = img.getAttribute("alt") || img.getAttribute("title") || null
+                pushUrl(src, nameHint)
+              })
+              doc.querySelectorAll("a[href]").forEach((anchor) => {
+                const href = anchor.getAttribute("href")
+                const nameHint = anchor.getAttribute("download") || (anchor.textContent ? anchor.textContent.trim() : null)
+                pushUrl(href, nameHint)
+              })
+            } catch (error) {
+              console.warn("Failed to parse clipboard HTML", error)
+            }
+          }
+          return urls
+        }
+        const getClipboardPlainText = (clipboardData) => {
+          if (!clipboardData || typeof clipboardData.getData !== "function") {
+            return ""
+          }
+          try {
+            return clipboardData.getData("text/plain") || ""
+          } catch (_) {
+            return ""
+          }
+        }
+        const isLikelyImagePaste = (clipboardData) => {
+          if (!clipboardData) {
+            return false
+          }
+          const types = Array.from(clipboardData.types || [])
+          if (types.some((type) => type && type.toLowerCase().startsWith("image/"))) {
+            return true
+          }
+          if (typeof clipboardData.getData === "function") {
+            try {
+              const html = clipboardData.getData("text/html") || ""
+              if (html && /<img\b/i.test(html)) {
+                return true
+              }
+            } catch (_) {}
+            try {
+              const uriList = clipboardData.getData("text/uri-list") || ""
+              if (uriList && uriList.split(/\r?\n/).some((line) => {
+                const trimmed = line.trim()
+                if (!trimmed || trimmed.startsWith("#")) {
+                  return false
+                }
+                return /^https?:\/\//i.test(trimmed)
+              })) {
+                return true
+              }
+            } catch (_) {}
+          }
+          return false
+        }
+        let suppressClipboardText = false
+        let dragDepth = 0
+        const prevent = (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        terminalContainer.addEventListener("dragenter", (event) => {
+          prevent(event)
+          dragDepth += 1
+          dropOverlay.classList.add("active")
+        })
+        terminalContainer.addEventListener("dragover", prevent)
+        terminalContainer.addEventListener("dragleave", (event) => {
+          prevent(event)
+          dragDepth = Math.max(0, dragDepth - 1)
+          if (dragDepth === 0) {
+            dropOverlay.classList.remove("active")
+          }
+        })
+        terminalContainer.addEventListener("drop", async (event) => {
+          prevent(event)
+          dragDepth = 0
+          dropOverlay.classList.remove("active")
+          const files = Array.from(event.dataTransfer ? event.dataTransfer.files || [] : [])
+          let remoteResources = []
+          try {
+            const extra = await this.collectFilesFromDataTransfer(event.dataTransfer)
+            if (extra && Array.isArray(extra.urls) && extra.urls.length) {
+              const seenUrls = new Set()
+              remoteResources = extra.urls.filter((item) => {
+                if (!item || typeof item.href !== "string") {
+                  return false
+                }
+                const key = item.href.trim()
+                if (!key || seenUrls.has(key)) {
+                  return false
+                }
+                seenUrls.add(key)
+                return true
+              })
+            }
+          } catch (error) {
+            console.warn("Failed to collect files from drop payload", error)
+          }
+          if (!files.length && (!remoteResources || remoteResources.length === 0)) {
+            return
+          }
+          try {
+            if (remoteResources && remoteResources.length > 0) {
+              await this.uploadRemoteResources(remoteResources, dropOverlay)
+            }
+          } catch (error) {
+            console.warn("Remote upload failed", error)
+          }
+          if (files.length > 0) {
+            await this.uploadFiles(files, dropOverlay)
+          }
+          this.term.focus()
+        })
+        terminalContainer.addEventListener("paste", async (event) => {
+          const clipboard = event && event.clipboardData ? event.clipboardData : null
+          const plainText = getClipboardPlainText(clipboard)
+          const hasPlainText = typeof plainText === "string" && plainText.trim().length > 0
+          const { files: directFiles, hasFileFlavor } = collectClipboardFiles(clipboard)
+          let files = directFiles
+          let remoteUrls = []
+          if (files.length === 0) {
+            remoteUrls = extractUrlsFromClipboard(clipboard)
+            if (remoteUrls.length === 0 && !hasFileFlavor && isLikelyImagePaste(clipboard)) {
+              files = await readClipboardFilesFallback()
+            }
+          }
+          console.log('[clipboard paste][terminal]', {
+            files: files.map((file) => ({ name: file.name, size: file.size, type: file.type })),
+            remoteUrls,
+            hasFileFlavor,
+            hasPlainText,
+            types: clipboard ? Array.from(clipboard.types || []) : []
+          })
+          const shouldHandleUpload = files.length > 0 || (remoteUrls.length > 0 && !hasPlainText)
+          if (!shouldHandleUpload) {
+            suppressClipboardText = false
+            return
+          }
+          event.preventDefault()
+          event.stopPropagation()
+          suppressClipboardText = true
+          try {
+            if (remoteUrls.length > 0 && !hasPlainText) {
+              await this.uploadRemoteResources(remoteUrls, dropOverlay)
+            }
+            if (files.length > 0) {
+              await this.uploadFiles(files, dropOverlay)
+            }
+          } catch (error) {
+            console.warn("Clipboard upload failed", error)
+          }
+          this.term.focus()
+        }, true)
+        term.attachCustomKeyEventHandler(event => {
+          if (event.type && event.type.toLowerCase() !== 'keydown') {
+            return true
+          }
+          const key = typeof event.key === "string" ? event.key.toLowerCase() : ""
+          if ((event.ctrlKey || event.metaKey) && key === 'c') {
+            const selection = term.getSelection();
+            if (selection) {
+              navigator.clipboard.writeText(selection);
+              return false;
+            }
+          }
+          if ((event.ctrlKey || event.metaKey) && key === 'v') {
+            // Let the browser paste handler run so we don't send ^V to the shell
+            suppressClipboardText = false
+            return false
+          }
+          return true;
+        });
+        //const rows = Math.floor(document.querySelector("#terminal").clientHeight / term._core.viewport._charSizeService.height);
+        //const cols = Math.floor(document.querySelector("#terminal").clientHeight / term._core.viewport._charSizeService.width);
+        //console.log(cols, term.cols)
+        //  // Resize the terminal
+        ////term.resize(cols, rows-5);
+        //term.resize(cols, rows);
+
+        term.onData((data) => {
+          const targetId = shell_id || this.currentId
+          if (this.socket && targetId) {
+            if (shell_id) {
+              this.socket.run({
+                key: data,
+                id: targetId
+              })
+            } else {
+              this.pendingInput.push(data)
+            }
+          }
+          if (typeof window.processTerminalInputData === "function") {
+            window.processTerminalInputData(data, {
+              capture: (chunk) => this.captureTextInput(chunk),
+              backspace: () => this.handleBackspace(),
+              reset: () => this.resetInputBuffer()
+            })
+          } else {
+            this.captureTextInput(data)
+          }
+        })
+
+        const fitAddon = new FitAddon.FitAddon();
+//        const searchAddon = new SearchAddon.SearchAddon();
+//        const searchAddonBar = new SearchBarAddon.SearchBarAddon({searchAddon});
+        term.loadAddon(fitAddon);
+        
+          term.loadAddon(new WebLinksAddon.WebLinksAddon());
+        
+//        term.loadAddon(searchAddon)
+//        term.loadAddon(searchAddonBar);
+//        searchAddonBar.show();
+        fitAddon.fit();
+        this.term = term
+        this.fit = fitAddon
+        this.resizeSync.updateTerm(this.term, this.fit, this.socket)
+        this.tabCaptionHelper = window.PinokioTabCaptionHelper.attach(term, { tracker: this.inputTracker })
+
+      }
+      this.term.focus()
+      this.observer = new ResizeObserver(() => {
+        this.fit.fit()
+        this.resizeSync.sendResize(this.term.cols, this.term.rows)
+      });
+      this.observer.observe(document.body)
+    }
+  }
+  
+    rpc = new RPC()
+
+    
+      window.addEventListener('message', function(event) {
+        console.log("Message received from the parent: ", event.data); // Message received from parent
+        //  "foreground" message triggers a redraw so buffered output appears after backgrounding.
+        if (event.data && event.data.action === "foreground") {
+          if (rpc.dirty && rpc.term) {
+            const endRow = Math.max(rpc.term.rows - 1, 0)
+            rpc.term.refresh(0, endRow)
+            if (typeof rpc.term.scrollToBottom === "function") {
+              rpc.term.scrollToBottom()
+            }
+            rpc.dirty = false
+          }
+
+          //console.log("buffer", rpc.term.buffer)
+          //if (rpc.term.buffer) {
+          //  const lastRow = rpc.term.buffer.active.baseY;
+          //  const lastLine = rpc.term.buffer.active.getLine(lastRow);
+          //  const lastLine2 = rpc.term.buffer.active.getLine(lastRow-1);
+          //  const cell = lastLine.getCell().getChars()
+          //  const cell2 = lastLine.getCell().getChars()
+          //  console.log({ lastLine, lastLine2, cell, cell2 })
+          //  const lastStr = cell[cell.length - 3];
+          //  console.log({ lastRow, lastLine, lastStr })
+
+          //  const delimiter = "\r\n█"
+          //  if (lastStr === delimiter) {
+          //    console.log("don't update") 
+          //  } else {
+          //    console.log("update")
+          //    rpc.term.write(delimiter)
+          //  }
+          //}
+        }
+      });
+
+      if (document.querySelector(".stop")) {
+        document.querySelector(".stop").addEventListener("click", async (e) => {
+          await rpc.stop()
+      //    socket.run({
+      //      id: location.pathname,
+      //      method: "kernel.api.stop"
+      //    }, (stream) => {
+      //      console.log("#", stream)
+      //    })
+        })
+      }
+      if (document.querySelector(".play")) {
+        document.querySelector(".play").addEventListener("click", async (e) => {
+          await rpc.run()
+        })
+      }
+    
+
+    
+      
+        // run (query params run=true)
+        await rpc.run()
+      
+    
+  
+
+  if (document.querySelector("#lv")) {
+    document.querySelector("#lv").addEventListener("click", (e) => {
+      let m = e.target.closest(".memory")
+      m.classList.toggle("collapsed")
+      if (m.classList.contains("collapsed")) {
+        m.querySelector("i").className = "fa-solid fa-sort-down"
+      } else {
+        m.querySelector("i").className = "fa-solid fa-sort-up"
+      }
+    })
+  }
+  document.querySelector("#close-error-screen").addEventListener('click', (e) => {
+    document.querySelector("#error-screen").classList.add("hidden")
+  })
+  if (document.querySelector("#del-bin")) {
+    document.querySelector("#del-bin").addEventListener("click", async (e) => {
+      console.log("del-bin")
+      let proceed = confirm("Are you sure you wish to delete the bin folder?")
+      if (proceed) {
+        document.querySelector(".reset-bin-loading").classList.remove("hidden")
+        document.querySelector("#del-bin").classList.add("hidden")
+        let res = await fetch("/pinokio/delete", {
+          method: "post",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ type: "bin" })
+        }).then((res) => {
+          return res.json()
+        })
+        console.log(res)
+        document.querySelector(".reset-bin-loading").classList.add("hidden")
+        if (res.error) {
+          alert(res.error)
+        } else {
+          //location.href = location.href
+          document.querySelector("#install-form").submit()
+        }
+      }
+    })
+  }
+//  document.querySelector("#open-log").addEventListener("click", async (e) => {
+//    let logs = await fetch("/getlog?logpath=%2FUsers%2Fvengtheng%2Fpinokio%2Flogs%2Fshell%2Fcleaned%2Fapi%2Fchatstudio-mac%2Fstart.js").then((res) => {
+//      return res.text()
+//    })
+//    console.log(logs)
+//  })
+})
+const reloadMemory = async () => {
+//  let url = "/pinokio/memory?filepath=%2FUsers%2Fvengtheng%2Fpinokio%2Fapi%2Fchatstudio-mac%2Fstart.js"
+//  console.log("Url", url)
+//  let memory = await fetch(url).then((res) => {
+//    return res.json()
+//  })
+//  console.log("memory", memory)
+//  document.querySelector(".memory table").innerHTML = memory.map((m) => {
+//    let html = `<tr><td>local.${m.key}</td><td>${m.val}</td>`
+//    if (m.localhost) {
+//      if (m.tunnel) {
+//        html += `<td>${m.tunnel}</td>
+//  <td><a class='btn2' target="_blank" href="${m.tunnel}"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</a></td>
+//  <td><button data-url="${m.val}" class='btn2 tunnel-stop'><i class="fa-solid fa-lock-closed"></i> Make Private</button></td>`
+//      } else {
+//        html += `<td><button data-url="${m.val}" class='btn2 tunnel'><i class="fa-solid fa-lock-open"></i> Make Public</button></td>`
+//      }
+//    }
+//    html += "</tr>"
+//    return html
+//  }).join("")
+}
+
+</script>
+</head>
+
+<body class='terminal-page dark ' data-task-save-cwd="" data-task-save-workspaces-root="/Users/vengtheng/pinokio/workspaces">
+
+  
+  
+    <header class='navheader2'>
+      <div class='runner'>
+        
+        <div class='btn run '>
+          <span class='play'><i class="fa-solid fa-play"></i> Run</span>
+          <span class='starting hidden'><i class="fa-solid fa-circle-notch fa-spin"></i> Starting...</span>
+          <span class='stop hidden'><i class="fa-solid fa-stop"></i> Stop</span>
+        </div>
+        
+          <button class='btn' id='open-fs' data-filepath="/Users/vengtheng/pinokio/api/chatstudio-mac/start.js" data-command="view"><i class="fa-solid fa-folder-open"></i> File Explorer</button>
+        
+        
+          <button
+            type='button'
+            class='btn protection-toggle'
+            data-protection-toggle
+            role='switch'
+            aria-checked="false"
+            aria-label="Protection off"
+          >
+            <span class='protection-toggle-copy'>
+              <span class='protection-toggle-icon-wrap' aria-hidden="true">
+                <i class="fa-solid fa-shield-halved protection-toggle-icon"></i>
+              </span>
+              <span class='protection-toggle-label'>Protection</span>
+              <span class='protection-toggle-state' data-protection-state>Off</span>
+            </span>
+            <span class='protection-toggle-switch' aria-hidden="true"></span>
+          </button>
+        
+        <button class='btn hidden' type='button' data-save-task-button hidden><i class="fa-solid fa-bookmark"></i> Save task</button>
+        <div id='status-window'></div>
+        <div id='progress-window' class='hidden'><div id='progress-bar'></div></div>
+    </div>
+
+      </div>
+    </header>
+  
+  
+    
+      <div class='terminal-container'>
+        
+          <div class='memory'>
+            <div class='memory-header'>
+              <div>Memory</div>
+              <div class='flexible'></div>
+              <div id='lv' class='btn2'><i class="fa-solid fa-sort-up"></i></div>
+            </div>
+            <table>
+            
+              <tr>
+                <td>local.url</td>
+                <td>http://0.0.0.0:47871</td>
+                
+              </tr>
+            
+            </table>
+          </div>
+        
+        <div id='terminal'></div>
+      </div>
+    
+  
+  <div id='error-screen' class='hidden'>
+    <pre></pre>
+    <div id='error-screen-footer'>
+      <a class='btn' id='close-error-screen'>
+        <div><i class="fa-solid fa-xmark"></i></div>
+      </a>
+      <div class='flexible'></div>
+      <button type='button' class='btn' data-ask-ai-trigger="true" data-workspace="chatstudio-mac" data-workspace-cwd="">
+        <div><i class="fa-solid fa-robot"></i> Ask AI</div>
+      </button>
+      <a class='btn' href="https://beta.pinokio.co" target="_blank">
+        <div><i class="fa-solid fa-question"></i> Ask Community</div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -242,6 +242,9 @@ class LLMManager:
         """Yields text chunks as the model generates. Uses mlx_lm.stream_generate
         under the hood — each yielded item's `.text` is the newly generated
         delta since the previous chunk."""
+        import sys
+        with open("/tmp/chat_studio_debug.log", "a") as _f:
+            _f.write(f"[chat studio] stream_chat called for {repo}\n")
         loaded, prompt = self.build_prompt(repo, messages)
         try:
             # Monkey-patch mlx_lm's generation_stream to use a regular Stream
@@ -254,13 +257,13 @@ class LLMManager:
             # IMPORTANT: `import mlx_lm.generate as x` imports the `generate`
             # *function*, NOT the module! We must use sys.modules to get the
             # actual module reference, otherwise the patch silently fails.
-            import sys
             import mlx.core as mx
             gen_module = sys.modules['mlx_lm.generate']
+            old_stream = gen_module.generation_stream
             new_stream = mx.default_stream(mx.default_device())
             gen_module.generation_stream = new_stream
-            print(f"[chat studio] patched generation_stream: {new_stream} (type: {type(new_stream).__name__})",
-                  file=sys.stderr, flush=True)
+            with open("/tmp/chat_studio_debug.log", "a") as _f:
+                _f.write(f"[chat studio] patched generation_stream: {old_stream} ({type(old_stream).__name__}) -> {new_stream} ({type(new_stream).__name__})\n")
 
             from mlx_lm import stream_generate
             from mlx_lm.sample_utils import make_sampler
