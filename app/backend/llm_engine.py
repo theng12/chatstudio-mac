@@ -253,21 +253,14 @@ class LLMManager:
         except Exception as e:
             raise RuntimeError(f"mlx_lm not importable: {e}") from e
 
-        # MLX Metal GPU streams are thread-local. If this method is called from
-        # a background thread (as it is in the streaming endpoint), the Metal
-        # context must be initialized explicitly on this thread.
-        import mlx.core as mx
-        _s = _init_metal()
-
-        with mx.stream(_s):
-            sampler = make_sampler(temp=temperature, top_p=top_p)
-            for response in stream_generate(
-                loaded.model, loaded.tokenizer, prompt,
-                max_tokens=max_tokens, sampler=sampler,
-            ):
-                text = getattr(response, "text", None)
-                if text:
-                    yield text
+        sampler = make_sampler(temp=temperature, top_p=top_p)
+        for response in stream_generate(
+            loaded.model, loaded.tokenizer, prompt,
+            max_tokens=max_tokens, sampler=sampler,
+        ):
+            text = getattr(response, "text", None)
+            if text:
+                yield text
 
     def chat_once(
         self,

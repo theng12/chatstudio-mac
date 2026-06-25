@@ -25,7 +25,6 @@ import socket
 import subprocess
 import sys
 import time
-import traceback
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -425,34 +424,13 @@ async def chat_completions(body: ChatCompletionsBody):
 
     if body.stream:
         async def event_stream():
-            loop = asyncio.get_event_loop()
-            queue: asyncio.Queue = asyncio.Queue()
-
-            def producer():
-                try:
-                    llm_engine._init_metal()
-                    for chunk in llm_engine.manager.stream_chat(
-                        body.repo, messages, body.temperature, body.max_tokens, body.top_p,
-                    ):
-                        asyncio.run_coroutine_threadsafe(queue.put(("chunk", chunk)), loop)
-                    asyncio.run_coroutine_threadsafe(queue.put(("done", None)), loop)
-                except Exception as e:
-                    tb = traceback.format_exc()
-                    print(f"[chat studio] producer error: {tb}", file=sys.stderr, flush=True)
-                    asyncio.run_coroutine_threadsafe(queue.put(("error", f"{type(e).__name__}: {e}\n\n{tb}")), loop)
-
-            import threading
-            threading.Thread(target=producer, daemon=True).start()
-
-            while True:
-                kind, payload = await queue.get()
-                if kind == "chunk":
-                    yield payload
-                elif kind == "error":
-                    yield f"\n[error] {payload}\n"
-                    break
-                else:
-                    break
+            try:
+                for chunk in llm_engine.manager.stream_chat(
+                    body.repo, messages, body.temperature, body.max_tokens, body.top_p,
+                ):
+                    yield chunk
+            except RuntimeError as e:
+                yield f"\n[error] {e}\n"
 
         return StreamingResponse(event_stream(), media_type="text/plain")
 
