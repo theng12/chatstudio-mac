@@ -477,6 +477,17 @@
             <span class="pkg-role" x-text="p.role"></span>
           </div>
         </template>
+        <div style="margin-top:12px;">
+          <button class="primary small" :disabled="depInstall.running" @click="installDeps()">
+            <span x-show="!depInstall.running">🔧 Repair dependencies</span>
+            <span x-show="depInstall.running" x-cloak>⏳ Installing…</span>
+          </button>
+          <span x-show="depInstall.result && depInstall.result.ok" class="chip ok" style="margin-left:8px;" x-cloak>done</span>
+          <span x-show="depInstall.result && !depInstall.result.ok" class="chip warn" style="margin-left:8px;" x-cloak>failed</span>
+        </div>
+        <div x-show="depInstall.result && depInstall.result.stderr" x-cloak style="margin-top:8px;">
+          <pre class="dep-log" x-text="(depInstall.result.stderr || '') + (depInstall.result.stdout || '')"></pre>
+        </div>
       </section>
 
       <!-- server -->

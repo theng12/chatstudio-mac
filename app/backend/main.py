@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 import uuid
@@ -550,6 +551,35 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
             "total_tokens": None,
         },
     }
+
+
+# ───────────── API: dependency repair ─────────────
+
+@app.post("/api/deps/install")
+async def install_deps():
+    """Re-run `pip install -r requirements.txt` inside the current
+    Python environment. Blocking call pushed to a thread executor so the
+    event loop stays responsive while pip downloads + compiles."""
+    app_dir = Path(__file__).resolve().parent.parent
+    req = app_dir / "requirements.txt"
+    install_args = [sys.executable, "-m", "pip", "install", "-r", str(req)]
+
+    loop = asyncio.get_event_loop()
+
+    def _run() -> dict:
+        try:
+            r = subprocess.run(
+                install_args,
+                capture_output=True, text=True, timeout=600,
+                cwd=str(app_dir),
+            )
+            return {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "stdout": "", "stderr": "timed out after 10 minutes"}
+        except Exception as e:
+            return {"ok": False, "stdout": "", "stderr": str(e)}
+
+    return await loop.run_in_executor(None, _run)
 
 
 # ───────────── static frontend ─────────────

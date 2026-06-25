@@ -24,6 +24,7 @@ function studio() {
 
     // ── chat ──
     diag: { available: false, error: null, packages: [] },
+    depInstall: { running: false, result: null },
     chatModels: [],
     currentRepo: null,
     selectedRepo: "",
@@ -108,6 +109,19 @@ function studio() {
     async refreshDiagnostics() {
       try { this.diag = await (await fetch(`${this.apiBase}/api/chat/diagnostics`)).json(); }
       catch (e) { this.diag = { available: false, error: String(e), packages: [] }; }
+    },
+    async installDeps() {
+      this.depInstall.running = true;
+      this.depInstall.result = null;
+      try {
+        const r = await fetch(`${this.apiBase}/api/deps/install`, { method: "POST" });
+        this.depInstall.result = await r.json();
+      } catch (e) {
+        this.depInstall.result = { ok: false, stdout: "", stderr: String(e) };
+      } finally {
+        this.depInstall.running = false;
+        await this.refreshDiagnostics();
+      }
     },
     async refreshChatModels() {
       try {
