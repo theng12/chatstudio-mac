@@ -25,6 +25,12 @@ function studio() {
     // ── chat ──
     diag: { available: false, error: null, packages: [] },
     depInstall: { running: false, result: null },
+
+    // ── cloud providers ──
+    providers: [],
+    providerKeyInputs: {},
+    providerSaving: null,
+    providerTests: {},
     chatModels: [],
     currentRepo: null,
     selectedRepo: "",
@@ -56,6 +62,7 @@ function studio() {
       await this.refreshCatalog();
       await this.refreshDiagnostics();
       await this.refreshChatModels();
+      await this.refreshProviders();
       await this.refreshConnectivity();
       this.pickDefaultModel();
       this.pollDownloads();
@@ -75,7 +82,7 @@ function studio() {
       if (tab === "chat") { this.refreshDiagnostics(); this.refreshChatModels(); }
       if (tab === "models") this.refreshCatalog();
       if (tab === "api") this.refreshConnectivity();
-      if (tab === "settings") { this.refreshSettings(); this.refreshConnectivity(); this.refreshDiagnostics(); }
+      if (tab === "settings") { this.refreshSettings(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); }
     },
 
     async refreshAll() {
@@ -128,8 +135,26 @@ function studio() {
     },
     async refreshChatModels() {
       try {
-        const data = await (await fetch(`${this.apiBase}/api/chat/models`)).json();
-        this.chatModels = data.models || [];
+        const [local, prov] = await Promise.all([
+          fetch(`${this.apiBase}/api/chat/models`).then(r => r.json()).catch(() => ({models: []})),
+          fetch(`${this.apiBase}/api/providers`).then(r => r.json()).catch(() => ({providers: []})),
+        ]);
+        const locals = (local.models || []).map(m => ({...m, source: 'local'}));
+        const clouds = [];
+        for (const p of (prov.providers || [])) {
+          for (const m of p.models) {
+            clouds.push({
+              repo: m.repo,
+              label: m.label,
+              source: 'cloud',
+              provider: p.key,
+              provider_name: p.name,
+              notes: m.notes,
+              key_set: p.key_set,
+            });
+          }
+        }
+        this.chatModels = [...locals, ...clouds];
         const loaded = this.chatModels.find(m => m.loaded);
         if (loaded) this.currentRepo = loaded.repo;
       } catch (e) {}
@@ -209,6 +234,12 @@ function studio() {
       if (this.selectedRepo && this.selectedRepo !== this.currentRepo) this.loadModel(this.selectedRepo);
     },
     async loadModel(repo) {
+      // Cloud models don't need a load step — just set them as current.
+      if (repo && repo.startsWith("provider:")) {
+        this.currentRepo = repo;
+        this.selectedRepo = repo;
+        return;
+      }
       this.loadingModel = repo;
       try {
         const r = await fetch(`${this.apiBase}/api/chat/load`, {
@@ -417,6 +448,51 @@ function studio() {
         if (r.ok) this.tokenTest = { ok: true, msg: `✓ Valid — signed in as ${d.name || "user"}` };
         else this.tokenTest = { ok: false, msg: "✗ " + (d.detail || "Invalid token") };
       } catch (e) { this.tokenTest = { ok: false, msg: "✗ " + String(e) }; }
+    },
+
+    // ── cloud provider handlers ──
+    async refreshProviders() {
+      try {
+        const d = await (await fetch(`${this.apiBase}/api/providers`)).json();
+        this.providers = d.providers || [];
+      } catch (e) { this.providers = []; }
+    },
+    async saveProviderKey(name) {
+      const key = (this.providerKeyInputs[name] || "").trim();
+      this.providerSaving = name;
+      try {
+        const r = await fetch(`${this.apiBase}/api/providers/${name}/key`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ api_key: key }),
+        });
+        const d = await r.json();
+        if (r.ok) {
+          this.providers = d.providers || [];
+          this.providerKeyInputs[name] = "";
+          this.providerTests[name] = { ok: true, msg: "✓ Saved" };
+        } else {
+          this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || "Save failed") };
+        }
+      } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
+      this.providerSaving = null;
+      await this.refreshChatModels();
+    },
+    async testProvider(name) {
+      const key = (this.providerKeyInputs[name] || "").trim();
+      this.providerTests[name] = { ok: false, msg: "Testing…" };
+      try {
+        const r = await fetch(`${this.apiBase}/api/providers/${name}/test`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ api_key: key || null }),
+        });
+        const d = await r.json();
+        if (r.ok && d.ok) {
+          this.providerTests[name] = { ok: true, msg: `✓ Valid — ${d.models_available} models available` };
+          this.providers = (await (await fetch(`${this.apiBase}/api/providers`)).json()).providers || [];
+        } else {
+          this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || `HTTP ${d.status || "?"}`) };
+        }
+      } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
     },
 
     // generation settings persistence

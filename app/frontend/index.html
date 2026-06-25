@@ -83,14 +83,14 @@
             <span class="muted small">Model</span>
             <select x-model="selectedRepo" @change="onPickModel()">
               <template x-for="m in chatModels" :key="m.repo">
-                <option :value="m.repo" x-text="m.label"></option>
+                <option :value="m.repo" x-text="(m.source==='cloud' ? '☁ ' : '') + m.label"></option>
               </template>
             </select>
             <span class="load-state" :class="loadingModel ? 'loading' : (currentRepo===selectedRepo ? 'ok':'')">
               <span x-show="loadingModel" x-cloak>● loading…</span>
               <span x-show="!loadingModel && currentRepo===selectedRepo" x-cloak>● ready</span>
             </span>
-            <button class="primary small" x-show="selectedRepo && currentRepo!==selectedRepo && !loadingModel" x-cloak @click="loadModel(selectedRepo)">Load</button>
+            <button class="primary small" x-show="selectedRepo && currentRepo!==selectedRepo && !loadingModel && !selectedRepo.startsWith('provider:')" x-cloak @click="loadModel(selectedRepo)">Load</button>
           </div>
           <div class="spacer"></div>
           <button class="ghost small" @click="newChat()" title="Clear the conversation">✦ New chat</button>
@@ -461,6 +461,46 @@
         </div>
         <p class="hint" x-show="settings.hf_token_set" x-cloak x-text="'Saved token: ' + settings.hf_token_masked"></p>
         <p class="test-result" :class="tokenTest.ok ? 'ok':'err'" x-show="tokenTest.msg" x-cloak x-text="tokenTest.msg"></p>
+      </section>
+
+      <!-- cloud providers -->
+      <section class="card" x-show="providers.length > 0" x-cloak>
+        <h3>Cloud providers</h3>
+        <p class="card-sub">Route chat requests to free hosted models. Pick a cloud model from the Chat tab's model dropdown — it shows a ☁ icon. Your API keys are stored locally in <code>settings.json</code> and never logged.</p>
+        <template x-for="p in providers" :key="p.key">
+          <div class="provider-row" style="border-top:1px solid var(--border); padding:14px 0;">
+            <div class="card-row" style="margin-bottom:6px;">
+              <strong x-text="p.name"></strong>
+              <span class="muted small" x-text="'· ' + p.models.length + ' models'"></span>
+              <span class="spacer" style="flex:1"></span>
+              <span class="chip ok" x-show="p.key_set" x-cloak>saved: <span x-text="p.key_masked"></span></span>
+              <span class="chip warn" x-show="!p.key_set" x-cloak>no key</span>
+            </div>
+            <div class="card-row" style="gap:8px;">
+              <input type="password" style="flex:1; min-width:220px;"
+                     :value="providerKeyInputs[p.key] || ''"
+                     @input="providerKeyInputs[p.key] = $event.target.value"
+                     placeholder="Paste API key" autocomplete="off" />
+              <button class="primary" @click="saveProviderKey(p.key)" :disabled="providerSaving === p.key">
+                <span x-show="providerSaving !== p.key">Save</span>
+                <span x-show="providerSaving === p.key" x-cloak>…</span>
+              </button>
+              <button class="ghost" @click="testProvider(p.key)">Test</button>
+              <a class="ghost" :href="p.docs_url" target="_blank" rel="noopener" style="text-decoration:none; padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:12px;">Get key ↗</a>
+            </div>
+            <p class="test-result" :class="(providerTests[p.key] || {}).ok ? 'ok' : 'err'"
+               x-show="(providerTests[p.key] || {}).msg" x-cloak
+               x-text="(providerTests[p.key] || {}).msg"></p>
+            <details style="margin-top:8px;">
+              <summary class="muted small" style="cursor:pointer;">Show models</summary>
+              <ul style="margin:6px 0 0 18px; font-size:12.5px; color:var(--muted);">
+                <template x-for="m in p.models" :key="m.repo">
+                  <li><strong x-text="m.label"></strong> <span class="faint" x-text="'· ' + m.notes"></span></li>
+                </template>
+              </ul>
+            </details>
+          </div>
+        </template>
       </section>
 
       <!-- engine diagnostics -->

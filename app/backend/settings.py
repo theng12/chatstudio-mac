@@ -24,6 +24,7 @@ _LOCK = threading.Lock()
 
 DEFAULTS: dict[str, Any] = {
     "hf_token": "",
+    "provider_keys": {},  # {"openrouter": "...", "nvidia": "..."}
 }
 
 _cache: dict[str, Any] = {}
@@ -78,6 +79,25 @@ def get_hf_token() -> Optional[str]:
 
 def set_hf_token(token: Optional[str]) -> None:
     set_value("hf_token", (token or "").strip())
+
+
+def get_provider_key(name: str) -> Optional[str]:
+    keys = get("provider_keys")
+    if not isinstance(keys, dict):
+        return None
+    val = keys.get(name)
+    if isinstance(val, str) and val.strip():
+        return val.strip()
+    return None
+
+
+def set_provider_key(name: str, token: Optional[str]) -> None:
+    keys = dict(get("provider_keys") or {})
+    if token:
+        keys[name] = token.strip()
+    else:
+        keys.pop(name, None)
+    set_value("provider_keys", keys)
 
 
 def serialize_public() -> dict:

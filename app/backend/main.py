@@ -36,7 +36,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub
+from . import cache, catalog, settings as app_settings, llm_engine, hub, providers
 from .downloads import manager
 
 
@@ -118,6 +118,10 @@ class SettingsBody(BaseModel):
 
 class TokenTestBody(BaseModel):
     hf_token: Optional[str] = None
+
+
+class ProviderKeyBody(BaseModel):
+    api_key: Optional[str] = None
 
 
 class LoadModelBody(BaseModel):
@@ -300,6 +304,47 @@ def test_hf_token(body: TokenTestBody) -> dict:
         raise HTTPException(status_code=400, detail=f"Token validation failed: {e}")
 
 
+# ───────────── API: cloud providers ─────────────
+
+@app.get("/api/providers")
+def list_providers() -> dict:
+    """List configured cloud providers + their free models. Never exposes raw
+    API keys — only a masked preview + key_set boolean."""
+    return {"providers": providers.public_view()}
+
+
+@app.post("/api/providers/{name}/key")
+def set_provider_key(name: str, body: ProviderKeyBody) -> dict:
+    if name not in providers.PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
+    app_settings.set_provider_key(name, body.api_key)
+    return {"ok": True, "providers": providers.public_view()}
+
+
+@app.post("/api/providers/{name}/test")
+async def test_provider_key(name: str, body: ProviderKeyBody) -> dict:
+    if name not in providers.PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
+    p = providers.PROVIDERS[name]
+    token = (body.api_key or "").strip() or providers.get_api_key(name)
+    if not token:
+        raise HTTPException(status_code=400, detail=f"No {p.name} API key provided.")
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"{p.base_url}/models",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if r.status_code == 200:
+            data = r.json()
+            model_count = len(data.get("data", [])) if isinstance(data, dict) else 0
+            return {"ok": True, "models_available": model_count}
+        return {"ok": False, "status": r.status_code, "detail": r.text[:300]}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Test failed: {e}")
+
+
 # ───────────── API: connectivity ─────────────
 
 def _classify_ip(ip: str) -> str:
@@ -428,8 +473,41 @@ def chat_cancel() -> dict:
 @app.post("/api/chat/completions")
 async def chat_completions(body: ChatCompletionsBody):
     messages = [m.model_dump() for m in body.messages]
-    # Auto-load the requested model if it's cached but not loaded (off the event
-    # loop so a multi-GB load doesn't stall other requests).
+
+    # Cloud provider routing — synthetic repo id `provider:<key>:<model_id>`.
+    if body.repo.startswith("provider:"):
+        parsed = providers.parse_repo(body.repo)
+        if not parsed:
+            raise HTTPException(status_code=400, detail=f"Unknown provider repo: {body.repo}")
+        provider, model = parsed
+        if body.stream:
+            async def event_stream():
+                try:
+                    async for chunk in providers.stream_chat(
+                        provider, model, messages,
+                        body.temperature, body.max_tokens, body.top_p,
+                    ):
+                        yield chunk
+                except Exception as e:
+                    import traceback
+                    print(f"[chat studio] cloud stream error:\n{traceback.format_exc()}",
+                          file=sys.stderr, flush=True)
+                    yield f"\n[error] {type(e).__name__}: {e}\n"
+            return StreamingResponse(event_stream(), media_type="text/plain")
+        # Non-streaming: collect chunks
+        try:
+            chunks = []
+            async for c in providers.stream_chat(
+                provider, model, messages,
+                body.temperature, body.max_tokens, body.top_p,
+            ):
+                chunks.append(c)
+            return {"repo": body.repo, "content": "".join(chunks)}
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    # Auto-load the requested local model if it's cached but not loaded
+    # (off the event loop so a multi-GB load doesn't stall other requests).
     try:
         await asyncio.to_thread(llm_engine.manager.ensure_loaded, body.repo)
     except RuntimeError as e:
