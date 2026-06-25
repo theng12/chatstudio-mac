@@ -244,6 +244,16 @@ class LLMManager:
         delta since the previous chunk."""
         loaded, prompt = self.build_prompt(repo, messages)
         try:
+            # Monkey-patch mlx_lm's generation_stream to use a regular Stream
+            # instead of a ThreadLocalStream. The ThreadLocalStream created by
+            # mx.new_thread_local_stream() inside stream_generate is the root
+            # cause of "There is no Stream(gpu, N) in current thread" errors —
+            # the working mlx_lm.server uses mx.default_stream() (a regular
+            # Stream) instead.
+            import mlx_lm.generate as _mlx_lm_gen
+            import mlx.core as mx
+            _mlx_lm_gen.generation_stream = mx.default_stream(mx.default_device())
+
             from mlx_lm import stream_generate
             from mlx_lm.sample_utils import make_sampler
         except Exception as e:
