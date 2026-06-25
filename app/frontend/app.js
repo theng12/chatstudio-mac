@@ -310,7 +310,13 @@ function studio() {
       const meta = `~${approxTok} tok · ${secs.toFixed(1)}s · ~${tps} tok/s` + (stopped ? " · stopped" : "");
       if ((content || "").trim()) this.messages.push({ role: "assistant", content, meta });
     },
-    stopGen() { if (this._abort) try { this._abort.abort(); } catch (e) {} },
+    stopGen() {
+      // Tell the server to stop generating (frees the GPU now), then abort the
+      // client stream. Without the server call, generation would run to
+      // max_tokens in the background even though we stopped reading.
+      fetch(`${this.apiBase}/api/chat/cancel`, { method: "POST" }).catch(() => {});
+      if (this._abort) try { this._abort.abort(); } catch (e) {}
+    },
     scrollThread() {
       this.$nextTick(() => { const el = this.$refs.thread; if (el) el.scrollTop = el.scrollHeight; });
     },

@@ -418,12 +418,28 @@ def chat_load(body: LoadModelBody) -> dict:
     return result
 
 
+@app.post("/api/chat/cancel")
+def chat_cancel() -> dict:
+    """Stop the in-flight generation (Stop button). Frees the worker so the
+    next message can start immediately instead of waiting out max_tokens."""
+    return {"ok": llm_engine.manager.cancel()}
+
+
 @app.post("/api/chat/completions")
 async def chat_completions(body: ChatCompletionsBody):
     messages = [m.model_dump() for m in body.messages]
+    # Auto-load the requested model if it's cached but not loaded (off the event
+    # loop so a multi-GB load doesn't stall other requests).
+    try:
+        await asyncio.to_thread(llm_engine.manager.ensure_loaded, body.repo)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     if body.stream:
-        async def event_stream():
+        # A *sync* generator: Starlette iterates it in a threadpool, so the
+        # blocking MLX stream never stalls the event loop. (The MLX work itself
+        # runs on the engine's dedicated worker thread — see llm_engine.)
+        def event_stream():
             try:
                 for chunk in llm_engine.manager.stream_chat(
                     body.repo, messages, body.temperature, body.max_tokens, body.top_p,
@@ -431,9 +447,9 @@ async def chat_completions(body: ChatCompletionsBody):
                     yield chunk
             except Exception as e:
                 import traceback
-                tb = traceback.format_exc()
-                print(f"[chat studio] stream error: {tb}", file=sys.stderr, flush=True)
-                yield f"\n[error] {type(e).__name__}: {e}\n\n{tb}\n"
+                print(f"[chat studio] stream error:\n{traceback.format_exc()}",
+                      file=sys.stderr, flush=True)
+                yield f"\n[error] {type(e).__name__}: {e}\n"
 
         return StreamingResponse(event_stream(), media_type="text/plain")
 
@@ -469,6 +485,13 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
     messages = [m.model_dump() for m in body.messages]
     created = int(time.time())
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+
+    # Drop-in OpenAI behavior: load the requested model on demand if needed, so
+    # clients (e.g. Story Studio) just specify `model` without a separate load.
+    try:
+        await asyncio.to_thread(llm_engine.manager.ensure_loaded, body.model)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     if body.stream:
         async def event_stream():

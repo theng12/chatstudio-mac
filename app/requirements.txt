@@ -1,8 +1,11 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 huggingface_hub>=1.0
+hf_xet>=1.1
 httpx>=0.27
 sse-starlette>=2.1
 python-multipart>=0.0.9
-mlx>=0.20
-mlx-lm>=0.20
+# Floors set to the tested versions. mlx-lm < 0.31 lacks the gemma4
+# architecture, so Gemma 4 models would fail to load on a stale env.
+mlx>=0.31
+mlx-lm>=0.31

@@ -64,6 +64,12 @@ def set_value(key: str, value: Any) -> None:
 
 
 def get_hf_token() -> Optional[str]:
+    # An explicit env override wins, as documented in the ENVIRONMENT file
+    # (CHATSTUDIO_HF_TOKEN "Overrides the UI's saved token"). HF_TOKEN is also
+    # honored so a standard Hugging Face env var just works.
+    env = (os.environ.get("CHATSTUDIO_HF_TOKEN") or os.environ.get("HF_TOKEN") or "").strip()
+    if env:
+        return env
     token = get("hf_token")
     if isinstance(token, str) and token.strip():
         return token.strip()

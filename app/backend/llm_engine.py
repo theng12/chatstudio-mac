@@ -14,26 +14,14 @@ list into the prompt string the model expects. This mirrors what
 """
 from __future__ import annotations
 
+import queue
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Iterator, Optional
 
 from . import cache
-
-
-def _init_metal():
-    """Ensure the Metal GPU stream is initialized on the calling thread.
-    MLX Metal streams are thread-local — any thread that performs GPU ops
-    must initialize its own stream first. Safe to call multiple times.
-    Returns the thread-local stream so callers can wrap MLX work in
-    ``mx.stream(_init_metal())``."""
-    import mlx.core as mx
-    import sys
-    s = mx.new_thread_local_stream(mx.gpu)
-    print(f"[chat studio] _init_metal on thread {threading.current_thread().name}: {s}",
-          file=sys.stderr, flush=True)
-    return s
 
 
 def availability() -> dict:
@@ -101,12 +89,28 @@ class LoadedModel:
 
 
 class LLMManager:
-    """Holds at most one loaded MLX chat model at a time."""
+    """Holds at most one loaded MLX chat model at a time.
+
+    ── Threading model ──
+    MLX arrays carry a thread/stream affinity: a model loaded on one thread
+    cannot be evaluated on another (`mx.eval` raises "There is no Stream(gpu, N)
+    in current thread"). FastAPI runs sync handlers in a threadpool and streams
+    responses from yet another thread, so without care, load and generation land
+    on different threads and crash. We therefore funnel ALL MLX work — load,
+    generate, unload — through a single dedicated worker thread, so every GPU op
+    for the engine happens on one consistent thread. Generation is serialized as
+    a result, which is exactly what we want for a one-model-at-a-time local app.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._loaded: Optional[LoadedModel] = None
         self._load_error: Optional[str] = None
+        # The single thread every MLX operation runs on.
+        self._exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx")
+        # Set to request the in-flight generation stop early (Stop button /
+        # client disconnect). Checked each token by the generation loop.
+        self._cancel = threading.Event()
 
     def loaded_repo(self) -> Optional[str]:
         with self._lock:
@@ -120,9 +124,41 @@ class LLMManager:
         return self._load_error
 
     def load(self, repo: str) -> dict:
-        """Load `repo` into memory, unloading whatever was loaded before it.
-        Blocking — callers should run this off the request thread if they
-        care about not blocking other requests during a multi-GB load."""
+        """Load `repo` into memory (unloading any previous model first). Runs on
+        the dedicated MLX worker thread; blocks the caller until done."""
+        return self._exec.submit(self._load_sync, repo).result()
+
+    def ensure_loaded(self, repo: Optional[str]) -> str:
+        """Make `repo` the active model, loading it on demand if it's cached but
+        not loaded. Lets the OpenAI-compatible `/v1` endpoint work as a drop-in
+        server (request a model → it loads itself), instead of requiring an
+        explicit /api/chat/load first. Returns the repo that is now loaded.
+        Raises RuntimeError if no usable model can be made ready."""
+        if not repo:
+            current = self.loaded_repo()
+            if current is None:
+                raise RuntimeError(
+                    "No model is loaded and none was specified. Load one first "
+                    "(POST /api/chat/load) or pass a model id."
+                )
+            return current
+        if self.is_loaded(repo):
+            return repo
+        if cache.cache_state(repo) != "cached":
+            raise RuntimeError(
+                f"Model {repo} is not downloaded on this server. "
+                f"Download it from the Models tab first."
+            )
+        self.load(repo)
+        return repo
+
+    def cancel(self) -> bool:
+        """Ask the in-flight generation to stop at the next token. No-op if
+        nothing is generating."""
+        self._cancel.set()
+        return True
+
+    def _load_sync(self, repo: str) -> dict:
         with self._lock:
             if self._loaded is not None and self._loaded.repo == repo:
                 return {"repo": repo, "already_loaded": True}
@@ -156,6 +192,9 @@ class LLMManager:
             return {"repo": repo, "already_loaded": False}
 
     def unload(self) -> bool:
+        return self._exec.submit(self._unload_sync).result()
+
+    def _unload_sync(self) -> bool:
         with self._lock:
             if self._loaded is None:
                 return False
@@ -239,45 +278,63 @@ class LLMManager:
         max_tokens: int = 1024,
         top_p: float = 1.0,
     ) -> Iterator[str]:
-        """Yields text chunks as the model generates. Uses mlx_lm.stream_generate
-        under the hood — each yielded item's `.text` is the newly generated
-        delta since the previous chunk."""
-        import sys
-        with open("/tmp/chat_studio_debug.log", "a") as _f:
-            _f.write(f"[chat studio] stream_chat called for {repo}\n")
+        """Yields text chunks as the model generates.
+
+        The actual MLX generation runs on the manager's single worker thread —
+        the SAME thread the model was loaded on — because MLX arrays are
+        thread/stream-bound. Prompt building (tokenizer only, no GPU work) runs
+        on the caller's thread; generated text is bridged back over a queue, so
+        this stays a simple synchronous iterator for callers."""
         loaded, prompt = self.build_prompt(repo, messages)
+
+        chunks: "queue.Queue" = queue.Queue()
+        _DONE = object()
+
+        def _generate():
+            # Reset cancellation on the worker right before generating, so a
+            # second request arriving while this one is queued can't clear a
+            # cancel meant for the generation that's actually running.
+            self._cancel.clear()
+            try:
+                from mlx_lm import stream_generate
+                from mlx_lm.sample_utils import make_sampler
+                sampler = make_sampler(temp=temperature, top_p=top_p)
+                for response in stream_generate(
+                    loaded.model, loaded.tokenizer, prompt,
+                    max_tokens=max_tokens, sampler=sampler,
+                ):
+                    text = getattr(response, "text", None)
+                    if text:
+                        chunks.put(("chunk", text))
+                    # Stop generating as soon as a cancel is requested — this is
+                    # what actually frees the GPU, not just closing the socket.
+                    if self._cancel.is_set():
+                        break
+                chunks.put((_DONE, None))
+            except Exception as e:  # surfaced to the caller below
+                chunks.put(("error", e))
+
+        future = self._exec.submit(_generate)
         try:
-            # Monkey-patch mlx_lm's generation_stream to use a regular Stream
-            # instead of a ThreadLocalStream. The ThreadLocalStream created by
-            # mx.new_thread_local_stream() inside stream_generate is the root
-            # cause of "There is no Stream(gpu, N) in current thread" errors —
-            # the working mlx_lm.server uses mx.default_stream() (a regular
-            # Stream) instead.
-            #
-            # IMPORTANT: `import mlx_lm.generate as x` imports the `generate`
-            # *function*, NOT the module! We must use sys.modules to get the
-            # actual module reference, otherwise the patch silently fails.
-            import mlx.core as mx
-            gen_module = sys.modules['mlx_lm.generate']
-            old_stream = gen_module.generation_stream
-            new_stream = mx.default_stream(mx.default_device())
-            gen_module.generation_stream = new_stream
-            with open("/tmp/chat_studio_debug.log", "a") as _f:
-                _f.write(f"[chat studio] patched generation_stream: {old_stream} ({type(old_stream).__name__}) -> {new_stream} ({type(new_stream).__name__})\n")
-
-            from mlx_lm import stream_generate
-            from mlx_lm.sample_utils import make_sampler
-        except Exception as e:
-            raise RuntimeError(f"mlx_lm not importable: {e}") from e
-
-        sampler = make_sampler(temp=temperature, top_p=top_p)
-        for response in stream_generate(
-            loaded.model, loaded.tokenizer, prompt,
-            max_tokens=max_tokens, sampler=sampler,
-        ):
-            text = getattr(response, "text", None)
-            if text:
-                yield text
+            while True:
+                kind, payload = chunks.get()
+                if kind == "chunk":
+                    yield payload
+                elif kind == "error":
+                    raise RuntimeError(str(payload))
+                else:
+                    break
+        except GeneratorExit:
+            # The consumer went away (client disconnect or Stop closed the
+            # response) — tell the worker to stop instead of generating to
+            # max_tokens in the background.
+            self._cancel.set()
+            raise
+        finally:
+            # Make sure the worker stops and finishes, freeing the single worker
+            # thread for the next request (and propagating any failure).
+            self._cancel.set()
+            future.result()
 
     def chat_once(
         self,
