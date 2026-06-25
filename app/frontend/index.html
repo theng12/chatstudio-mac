@@ -43,6 +43,7 @@
     </nav>
 
     <div class="status">
+      <span class="version-badge" x-text="appVersion" x-show="appVersion" x-cloak></span>
       <span class="dot" :class="health.ok ? 'ok' : 'bad'"></span>
       <span x-text="health.ok ? 'online' : 'offline'"></span>
     </div>

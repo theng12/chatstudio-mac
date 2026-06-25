@@ -3,7 +3,7 @@ function studio() {
     // ── nav / meta ──
     tab: "chat",
     apiBase: window.location.origin,
-    appVersion: "__APP_VERSION__",
+    appVersion: "",
 
     health: { ok: false },
     system: {},
@@ -107,7 +107,10 @@ function studio() {
       } catch (e) {}
     },
     async refreshDiagnostics() {
-      try { this.diag = await (await fetch(`${this.apiBase}/api/chat/diagnostics`)).json(); }
+      try {
+        this.diag = await (await fetch(`${this.apiBase}/api/chat/diagnostics`)).json();
+        if (this.diag.app_version) this.appVersion = this.diag.app_version;
+      }
       catch (e) { this.diag = { available: false, error: String(e), packages: [] }; }
     },
     async installDeps() {

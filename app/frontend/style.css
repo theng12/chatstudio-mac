@@ -140,6 +140,7 @@ button.link.danger:hover { background: rgba(255,107,107,.12); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
 .dot.ok  { background: var(--ok); box-shadow: 0 0 0 3px rgba(63,217,192,.18); }
 .dot.bad { background: var(--bad); box-shadow: 0 0 0 3px rgba(255,107,107,.18); }
+.version-badge { font-family: var(--mono); font-size: 11px; color: var(--faint); padding: 2px 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); }
 
 /* ───────────── pages ───────────── */
 .page { flex: 1; min-height: 0; overflow-y: auto; }
