@@ -22,6 +22,18 @@ from typing import Iterator, Optional
 from . import cache
 
 
+def _init_metal() -> None:
+    """Ensure the Metal GPU stream is initialized on the calling thread.
+    MLX Metal streams are thread-local — any thread that performs GPU ops
+    must initialize its own stream first. Safe to call multiple times (the
+    underlying mlx.core.metal.device_get_default() is idempotent per thread)."""
+    try:
+        import mlx.core as mx
+        mx.metal.device_get_default()
+    except Exception:
+        pass
+
+
 def availability() -> dict:
     """Whether mlx-lm (and mlx) are importable on this machine. Mirrors the
     shape of VoiceStudio's generation.availability() — used by the frontend
@@ -234,6 +246,11 @@ class LLMManager:
             from mlx_lm.sample_utils import make_sampler
         except Exception as e:
             raise RuntimeError(f"mlx_lm not importable: {e}") from e
+
+        # MLX Metal GPU streams are thread-local. If this method is called from
+        # a background thread (as it is in the streaming endpoint), the Metal
+        # context must be initialized explicitly on this thread.
+        _init_metal()
 
         sampler = make_sampler(temp=temperature, top_p=top_p)
         for response in stream_generate(
