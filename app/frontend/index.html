@@ -174,10 +174,41 @@
         </div>
       </div>
 
-      <template x-for="family in orderedFamilies()" :key="family.id">
+      <!-- filter / sort toolbar -->
+      <div class="models-toolbar">
+        <input class="model-search" type="text" placeholder="Search models by name or repo…" x-model="modelSearch">
+        <select class="model-sort" x-model="sortBy">
+          <option value="default">Default order</option>
+          <option value="size">Size (smallest)</option>
+          <option value="ram">RAM needed (least)</option>
+          <option value="name">Name A–Z</option>
+        </select>
+      </div>
+      <div class="models-toolbar">
+        <span class="muted small">RAM fit:</span>
+        <div class="seg">
+          <button :class="{active: fitFilter==='all'}" @click="fitFilter='all'">All</button>
+          <button :class="{active: fitFilter==='ok'}" @click="fitFilter='ok'">✅ OK</button>
+          <button :class="{active: fitFilter==='tight'}" @click="fitFilter='tight'">⚠️ Tight</button>
+          <button :class="{active: fitFilter==='over'}" @click="fitFilter='over'">❌ Over</button>
+        </div>
+        <span class="muted small" style="margin-left:12px;">Capability:</span>
+        <div class="seg">
+          <button :class="{active: capFilter==='all'}" @click="capFilter='all'">All</button>
+          <button :class="{active: capFilter==='starter'}" @click="capFilter='starter'">⭐ Starter</button>
+          <button :class="{active: capFilter==='coder'}" @click="capFilter='coder'">💻 Code</button>
+          <button :class="{active: capFilter==='reasoning'}" @click="capFilter='reasoning'">🧠 Reasoning</button>
+        </div>
+      </div>
+      <div class="results-note" x-show="models.length > 0">
+        Showing <strong x-text="visibleModelCount()"></strong> model<span x-show="visibleModelCount() !== 1">s</span>
+        across <strong x-text="visibleFamilyCount()"></strong> famil<span x-show="visibleFamilyCount() !== 1">ies</span>
+      </div>
+
+      <template x-for="family in filteredFamilies()" :key="family.id">
         <section class="family">
           <div class="family-head">
-            <h2><span x-text="family.label"></span> <span class="fam-count" x-text="(modelsByFamily[family.id]||[]).length + ' models'"></span></h2>
+            <h2><span x-text="family.label"></span> <span class="fam-count" x-text="filteredModels(family.id).length + ' model' + (filteredModels(family.id).length === 1 ? '' : 's')"></span></h2>
             <p class="muted" x-text="family.summary"></p>
           </div>
           <details class="how">
@@ -187,7 +218,7 @@
           </details>
 
           <div class="model-list">
-            <template x-for="m in (modelsByFamily[family.id] || [])" :key="m.repo">
+            <template x-for="m in filteredModels(family.id)" :key="m.repo">
               <article class="model-card" :class="{cached: m.cache.state === 'cached'}">
                 <div class="model-meta">
                   <h3>

@@ -16,6 +16,12 @@ function studio() {
     jobs: [],
     activeDownloadCount: 0,
 
+    // ── model filter / sort ──
+    modelSearch: "",
+    fitFilter: "all",
+    capFilter: "all",
+    sortBy: "default",
+
     // ── chat ──
     diag: { available: false, error: null, packages: [] },
     chatModels: [],
@@ -115,6 +121,56 @@ function studio() {
         const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
         return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
       });
+    },
+
+    // ── model filter / sort logic ──
+    filteredFamilies() {
+      const order = ["llama", "qwen", "gemma4", "gemma3", "gemma2", "mistral", "phi", "deepseek"];
+      const fams = Object.values(this.families).filter(f => {
+        const ms = this.modelsByFamily[f.id] || [];
+        return ms.some(m => this._passesFilter(m));
+      });
+      return fams.sort((a, b) => {
+        const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
+    },
+    filteredModels(familyId) {
+      const ms = (this.modelsByFamily[familyId] || []).filter(m => this._passesFilter(m));
+      return this._sorted(ms);
+    },
+    visibleModelCount() {
+      return this.models.filter(m => this._passesFilter(m)).length;
+    },
+    visibleFamilyCount() {
+      return Object.values(this.families).filter(f => {
+        const ms = this.modelsByFamily[f.id] || [];
+        return ms.some(m => this._passesFilter(m));
+      }).length;
+    },
+    _passesFilter(m) {
+      if (this.modelSearch) {
+        const q = this.modelSearch.toLowerCase();
+        const label = (m.label || "").toLowerCase();
+        const repo = (m.repo || "").toLowerCase();
+        if (!label.includes(q) && !repo.includes(q)) return false;
+      }
+      if (this.fitFilter !== "all") {
+        if ((m.fit?.state || "") !== this.fitFilter) return false;
+      }
+      if (this.capFilter !== "all") {
+        if (this.capFilter === "starter" && !m.is_starter) return false;
+        if (this.capFilter === "coder" && !m.is_coder) return false;
+        if (this.capFilter === "reasoning" && !m.is_reasoning) return false;
+      }
+      return true;
+    },
+    _sorted(ms) {
+      const arr = [...ms];
+      if (this.sortBy === "size") arr.sort((a, b) => a.size_gb - b.size_gb);
+      else if (this.sortBy === "ram") arr.sort((a, b) => a.min_unified_memory_gb - b.min_unified_memory_gb);
+      else if (this.sortBy === "name") arr.sort((a, b) => (a.label || "").localeCompare(b.label || ""));
+      return arr;
     },
 
     // ════════════ model loading ════════════
