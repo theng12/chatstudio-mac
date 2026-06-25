@@ -121,6 +121,9 @@ class LLMManager:
         """Load `repo` into memory, unloading whatever was loaded before it.
         Blocking — callers should run this off the request thread if they
         care about not blocking other requests during a multi-GB load."""
+        # Ensure Metal is initialized on this thread — mlx_load does GPU
+        # work and Uvicorn may dispatch sync handlers onto its thread pool.
+        _init_metal()
         with self._lock:
             if self._loaded is not None and self._loaded.repo == repo:
                 return {"repo": repo, "already_loaded": True}
@@ -154,6 +157,7 @@ class LLMManager:
             return {"repo": repo, "already_loaded": False}
 
     def unload(self) -> bool:
+        _init_metal()
         with self._lock:
             if self._loaded is None:
                 return False
