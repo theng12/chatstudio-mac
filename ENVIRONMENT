@@ -22,3 +22,20 @@ PINOKIO_SHARE_LOCAL_PORT=
 # saved token. Leave empty to use the web-saved token.
 ##########################################################################
 CHATSTUDIO_HF_TOKEN=
+
+##########################################################################
+# Cloud provider API keys (optional) — chat with hosted models through
+# their OpenAI-compatible APIs. Each overrides the key saved in the UI
+# (Settings -> Cloud providers). Leave empty to use the web-saved key.
+# Get a key:
+#   OpenRouter  https://openrouter.ai/keys
+#   NVIDIA NIM  https://build.nvidia.com
+#   Groq        https://console.groq.com/keys
+#   Cerebras    https://cloud.cerebras.ai
+#   Gemini      https://aistudio.google.com/apikey
+##########################################################################
+CHATSTUDIO_OPENROUTER_API_KEY=
+CHATSTUDIO_NVIDIA_API_KEY=
+CHATSTUDIO_GROQ_API_KEY=
+CHATSTUDIO_CEREBRAS_API_KEY=
+CHATSTUDIO_GEMINI_API_KEY=

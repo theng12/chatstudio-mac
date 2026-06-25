@@ -10,6 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.4.0] — 2026-06-25
+
+### Added
+
+- **Cloud providers** — chat with hosted models over OpenAI-compatible APIs alongside local MLX. Add a key in **Settings → Cloud providers** (or via `CHATSTUDIO_<PROVIDER>_API_KEY` in `ENVIRONMENT`); cloud models then appear in the Chat dropdown and stream like local ones. Providers: **OpenRouter**, **NVIDIA NIM**, **Groq**, **Cerebras**, **Google Gemini**. Adding a provider is a pure data entry in `providers.py` (base URL + key env var + curated model list); the UI picks it up automatically via `GET /api/providers`.
+
+> Model ids drift over time — if a cloud model errors, check the provider's current model list and update `providers.py`.
+
 ## [1.3.0] — 2026-06-25
 
 ### Fixed

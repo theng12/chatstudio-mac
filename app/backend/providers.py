@@ -135,7 +135,94 @@ NVIDIA = Provider(
 )
 
 
-PROVIDERS: dict[str, Provider] = {p.key: p for p in (OPENROUTER, NVIDIA)}
+GROQ = Provider(
+    key="groq",
+    name="Groq",
+    base_url="https://api.groq.com/openai/v1",
+    env_var="CHATSTUDIO_GROQ_API_KEY",
+    docs_url="https://console.groq.com/keys",
+    models=(
+        CloudModel(
+            "llama-3.3-70b-versatile",
+            "Llama 3.3 70B Versatile",
+            "Strong generalist · 128K context · ~300+ tok/s",
+        ),
+        CloudModel(
+            "llama-3.1-8b-instant",
+            "Llama 3.1 8B Instant",
+            "Fastest · great for quick replies",
+        ),
+        CloudModel(
+            "openai/gpt-oss-120b",
+            "GPT-OSS 120B",
+            "OpenAI's open model · strong reasoning",
+        ),
+        CloudModel(
+            "openai/gpt-oss-20b",
+            "GPT-OSS 20B",
+            "Smaller open model · very fast",
+        ),
+    ),
+)
+
+
+CEREBRAS = Provider(
+    key="cerebras",
+    name="Cerebras",
+    base_url="https://api.cerebras.ai/v1",
+    env_var="CHATSTUDIO_CEREBRAS_API_KEY",
+    docs_url="https://cloud.cerebras.ai",
+    models=(
+        CloudModel(
+            "llama3.1-8b",
+            "Llama 3.1 8B",
+            "Ultra-fast wafer-scale inference",
+        ),
+        CloudModel(
+            "gpt-oss-120b",
+            "GPT-OSS 120B",
+            "OpenAI's open model · ~3000 tok/s",
+        ),
+        CloudModel(
+            "qwen-3-235b-a22b-instruct-2507",
+            "Qwen3 235B Instruct",
+            "Large MoE · strong reasoning + coding",
+        ),
+    ),
+)
+
+
+GEMINI = Provider(
+    key="gemini",
+    name="Google Gemini",
+    # OpenAI-compatible endpoint (no trailing slash — stream_chat appends
+    # "/chat/completions"). Auth is a normal Bearer token.
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    env_var="CHATSTUDIO_GEMINI_API_KEY",
+    docs_url="https://aistudio.google.com/apikey",
+    models=(
+        CloudModel(
+            "gemini-3.5-flash",
+            "Gemini 3.5 Flash",
+            "Latest flagship Flash · multimodal · big context",
+        ),
+        CloudModel(
+            "gemini-3.1-flash-lite",
+            "Gemini 3.1 Flash-Lite",
+            "Fast + low-cost · frontier-class for its size",
+        ),
+        CloudModel(
+            "gemini-2.5-flash",
+            "Gemini 2.5 Flash",
+            "Proven stable Flash model",
+        ),
+    ),
+)
+
+
+PROVIDERS: dict[str, Provider] = {
+    p.key: p for p in (OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI)
+}
 
 
 def get_api_key(key: str) -> Optional[str]:
