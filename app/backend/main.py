@@ -25,6 +25,7 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -424,7 +425,9 @@ async def chat_completions(body: ChatCompletionsBody):
                         asyncio.run_coroutine_threadsafe(queue.put(("chunk", chunk)), loop)
                     asyncio.run_coroutine_threadsafe(queue.put(("done", None)), loop)
                 except Exception as e:
-                    asyncio.run_coroutine_threadsafe(queue.put(("error", str(e))), loop)
+                    tb = traceback.format_exc()
+                    print(f"[chat studio] producer error: {tb}", file=sys.stderr, flush=True)
+                    asyncio.run_coroutine_threadsafe(queue.put(("error", f"{type(e).__name__}: {e}\n\n{tb}")), loop)
 
             import threading
             threading.Thread(target=producer, daemon=True).start()

@@ -27,7 +27,11 @@ def _init_metal() -> None:
     MLX Metal streams are thread-local — any thread that performs GPU ops
     must initialize its own stream first. Safe to call multiple times."""
     import mlx.core as mx
-    mx.default_stream(mx.gpu)
+    import sys
+    s = mx.default_stream(mx.gpu)
+    mx.set_default_stream(s)
+    print(f"[chat studio] _init_metal on thread {threading.current_thread().name}: {s}",
+          file=sys.stderr, flush=True)
 
 
 def availability() -> dict:
