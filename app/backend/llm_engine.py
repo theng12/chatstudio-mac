@@ -250,9 +250,17 @@ class LLMManager:
             # cause of "There is no Stream(gpu, N) in current thread" errors —
             # the working mlx_lm.server uses mx.default_stream() (a regular
             # Stream) instead.
-            import mlx_lm.generate as _mlx_lm_gen
+            #
+            # IMPORTANT: `import mlx_lm.generate as x` imports the `generate`
+            # *function*, NOT the module! We must use sys.modules to get the
+            # actual module reference, otherwise the patch silently fails.
+            import sys
             import mlx.core as mx
-            _mlx_lm_gen.generation_stream = mx.default_stream(mx.default_device())
+            gen_module = sys.modules['mlx_lm.generate']
+            new_stream = mx.default_stream(mx.default_device())
+            gen_module.generation_stream = new_stream
+            print(f"[chat studio] patched generation_stream: {new_stream} (type: {type(new_stream).__name__})",
+                  file=sys.stderr, flush=True)
 
             from mlx_lm import stream_generate
             from mlx_lm.sample_utils import make_sampler
