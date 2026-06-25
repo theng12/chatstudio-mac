@@ -22,6 +22,15 @@ function studio() {
     capFilter: "all",
     sortBy: "default",
 
+    // ── RAM slider (Models tab hardware planner) ──
+    // Effective unified-memory budget used to score every model's fit chip
+    // LIVE on the client. Defaults to detected RAM; the user can drag/type it
+    // to preview a different machine (e.g. plan a 512 GB Mac before buying
+    // it). Seeded in _initRamPlanner() after /api/system.
+    ramGb: null,
+    ramIsDetected: true,
+    ramTiers: [8, 16, 24, 32, 48, 64, 128, 256, 512],
+
     // ── chat ──
     diag: { available: false, error: null, packages: [] },
     depInstall: { running: false, result: null },
@@ -64,6 +73,8 @@ function studio() {
       this.loadLive();
       await this.refreshHealth();
       await this.refreshSystem();
+      // Seed the RAM-slider budget from detected RAM (or a saved override).
+      this._initRamPlanner();
       await this.refreshCatalog();
       await this.refreshDiagnostics();
       await this.refreshChatModels();
@@ -246,6 +257,77 @@ function studio() {
       });
     },
 
+    // ── RAM slider + client-side hardware fit ──
+    /** Effective RAM budget (GB): slider value, else detected, else 16. */
+    get effectiveRam() {
+      return this.ramGb || this.system.unified_memory_gb || 16;
+    },
+    /** Client-side fit verdict vs effectiveRam. Mirrors backend
+     *  system_info.fit_for() (1.5× comfortable / 1.0× tight / below = over)
+     *  so the RAM slider re-scores every card instantly. Returns a `label`
+     *  too, since the model cards render m.fit.label. */
+    fitFor(minGb) {
+      const actual = this.effectiveRam;
+      const floor = Math.max(Number(minGb) || 0, 1);
+      const headroom = actual / floor;
+      let state, label;
+      if (headroom >= 1.5)      { state = "ok";    label = "✓ fits"; }
+      else if (headroom >= 1.0) { state = "tight"; label = "⚠ tight"; }
+      else                      { state = "risky"; label = "✗ over budget"; }
+      const hint = headroom >= 1.5
+        ? `${actual} GB is ≥1.5× this model's ${minGb} GB floor — comfortable headroom.`
+        : headroom >= 1.0
+          ? `${actual} GB just clears the ${minGb} GB floor — close other apps before loading.`
+          : `${actual} GB is below the ${minGb} GB floor — it would swap heavily or fail to load.`;
+      return { state, label, hint, actual_gb: actual, required_gb: Number(minGb) || 0 };
+    },
+    setRam(gb) {
+      const v = Math.max(1, Math.min(1024, Math.round(Number(gb) || 0)));
+      this.ramGb = v;
+      this.ramIsDetected = (v === this.system.unified_memory_gb);
+      try { localStorage.setItem("chatstudio.ramGb", String(v)); } catch {}
+    },
+    resetRamToDetected() {
+      const d = this.system.unified_memory_gb;
+      if (d) this.setRam(d);
+    },
+    _initRamPlanner() {
+      try {
+        const saved = localStorage.getItem("chatstudio.ramGb");
+        if (saved !== null && !isNaN(+saved)) {
+          this.ramGb = +saved;
+          this.ramIsDetected = (+saved === this.system.unified_memory_gb);
+          return;
+        }
+      } catch {}
+      this.ramGb = this.system.unified_memory_gb || 16;
+      this.ramIsDetected = !!this.system.unified_memory_gb;
+    },
+    /** "✨ Best for your RAM" — highest-quality model in each lane (overall /
+     *  starter / coder / reasoning) that still fits the budget. Live. */
+    bestPicks() {
+      const fits  = (m) => this.fitFor(m.min_unified_memory_gb).state !== "risky";
+      const score = (m) => (Number(m.min_unified_memory_gb) || 0) * 1000
+                         + (Number(m.size_gb) || 0) * 10
+                         + (/recommended/i.test(m.label || "") ? 5 : 0);
+      const pick = (predicate) => {
+        const c = (this.models || []).filter(m => fits(m) && predicate(m));
+        return c.length ? c.slice().sort((a, b) => score(b) - score(a))[0] : null;
+      };
+      const buckets = [
+        { id: "overall",   label: "Best overall",   icon: "🏆", model: pick(() => true) },
+        { id: "coder",     label: "Best for code",  icon: "💻", model: pick(m => m.is_coder) },
+        { id: "reasoning", label: "Best reasoning", icon: "🧠", model: pick(m => m.is_reasoning) },
+        { id: "starter",   label: "Best starter",   icon: "⭐", model: pick(m => m.is_starter) },
+      ];
+      const seen = new Set();
+      return buckets.filter(b => {
+        if (!b.model || seen.has(b.model.repo)) return false;
+        seen.add(b.model.repo);
+        return true;
+      });
+    },
+
     // ── model filter / sort logic ──
     filteredFamilies() {
       const order = ["llama", "qwen", "gemma4", "gemma3", "gemma2", "mistral", "phi", "deepseek"];
@@ -279,7 +361,11 @@ function studio() {
         if (!label.includes(q) && !repo.includes(q)) return false;
       }
       if (this.fitFilter !== "all") {
-        if ((m.fit?.state || "") !== this.fitFilter) return false;
+        // Scored live against the RAM slider. The "over" button maps to the
+        // "risky" fit state (the segmented control's label is "Over").
+        const st = this.fitFor(m.min_unified_memory_gb).state;
+        const want = this.fitFilter === "over" ? "risky" : this.fitFilter;
+        if (st !== want) return false;
       }
       if (this.capFilter !== "all") {
         if (this.capFilter === "starter" && !m.is_starter) return false;

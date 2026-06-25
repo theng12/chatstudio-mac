@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.10.0] — 2026-06-26
+
+### Added — RAM planner: interactive memory slider + live "Best for your RAM" picks (Models tab)
+
+The Models tab's "Your Mac" banner became an interactive **hardware planner** so you can size models to a machine you don't own yet.
+
+- **RAM slider + numeric entry + tier presets** (8 / 16 / 24 / 32 / 48 / 64 / 128 / 256 / 512 GB). Defaults to your detected RAM; drag/type to *preview* a different Mac (e.g. plan an M3 Ultra 512 GB before buying it). A `↩ My Mac` button snaps back to detected. The chosen budget persists across reloads.
+- **Live hardware fit** — per-card fit chips and the existing **RAM fit** segmented filter (All / OK / Tight / Over) are now scored **client-side** against the slider via `fitFor()`/`effectiveRam`, so they re-score instantly with no `/api/catalog` round-trip. This also fixes the "Over" filter, which previously compared against a fit state the backend never emitted.
+- **✨ Best for your RAM** — surfaces the highest-quality model in each lane (overall / code / reasoning / starter) that still fits the budget. At 8 GB it favours the small models; at 64 GB+ it upgrades to 70B-class.
+
+**Frontend-only — no new Python dependencies. A plain _Update_ from the Pinokio sidebar is enough.**
+
+---
+
 ## [1.9.0] — 2026-06-26
 
 ### Added

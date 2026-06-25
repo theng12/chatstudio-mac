@@ -297,6 +297,115 @@ button.link.danger:hover { background: rgba(255,107,107,.12); }
 }
 .your-mac-icon { font-size: 15px; }
 
+/* ─── RAM planner: slider + tiers that drive live fit scoring ─── */
+.ram-planner {
+  margin: 12px 0;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ram-planner-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text); }
+.ram-planner-spacer { flex: 1; }
+.ram-budget-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ram-budget-pill.preview {
+  background: color-mix(in srgb, #fbbf24 14%, transparent);
+  border-color: color-mix(in srgb, #fbbf24 45%, transparent);
+  color: #fbbf24;
+}
+.ram-slider-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ram-slider {
+  flex: 1;
+  min-width: 220px;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent-2), var(--accent));
+  outline: none;
+  cursor: pointer;
+}
+.ram-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.ram-slider::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+.ram-entry { display: flex; align-items: center; gap: 6px; }
+.ram-num {
+  width: 78px;
+  padding: 6px 8px;
+  text-align: right;
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.ram-tiers { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.ram-tier {
+  cursor: pointer;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.chip.ram-tier:hover { border-color: var(--accent); color: var(--text); }
+.chip.ram-tier.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.ram-planner-note { margin: 0; }
+.ram-reset { font-size: 12px; }
+
+/* ─── ✨ Best for your RAM — live recommendation cards ─── */
+.best-picks {
+  margin: 4px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border-2));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+}
+.best-picks-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.best-picks-head h2 { margin: 0; font-size: 15px; letter-spacing: 0.3px; color: var(--accent); }
+.best-picks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.best-pick-card {
+  padding: 11px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  background: var(--panel-2);
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.06s;
+}
+.best-pick-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.best-pick-lane { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+.best-pick-model { margin: 4px 0 8px; font-size: 13.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
+.best-pick-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
 .models-toolbar { display: flex; gap: 10px; align-items: center; margin: 4px 0 20px; flex-wrap: wrap; }
 .seg { display: inline-flex; border: 1px solid var(--border-2); border-radius: 9px; overflow: hidden; flex: none; }
 .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 14px; }

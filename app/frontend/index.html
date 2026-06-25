@@ -183,9 +183,76 @@
       <div class="page-head">
         <h1>Models</h1>
         <p class="muted">Curated MLX-ready chat models from <code>mlx-community</code> — already quantized, no conversion needed. Gemma sizes are real on-disk totals; others are 4-bit estimates.</p>
-        <div class="your-mac-banner" x-show="system.unified_memory_gb" x-cloak>
-          <span class="your-mac-icon">🖥</span>
-          <span>Your Mac: <strong x-text="system.chip || 'Apple Silicon'"></strong> · <strong><span x-text="system.unified_memory_gb"></span> GB</strong> unified memory</span>
+        <!-- ─── Hardware planner: RAM slider + live fit ─── -->
+        <div class="ram-planner" x-cloak>
+          <div class="ram-planner-head">
+            <span class="your-mac-icon">🖥</span>
+            <span x-show="system.unified_memory_gb">
+              Your Mac: <strong x-text="system.chip || 'Apple Silicon'"></strong>
+              · <strong><span x-text="system.unified_memory_gb"></span> GB</strong> unified memory
+            </span>
+            <span x-show="!system.unified_memory_gb" class="muted">
+              Couldn't detect your Mac's RAM — set a budget below to score model fit.
+            </span>
+            <span class="ram-planner-spacer"></span>
+            <span class="ram-budget-pill" :class="{ preview: !ramIsDetected }">
+              Planning for <strong><span x-text="ramGb"></span> GB</strong>
+              <span class="muted small" x-show="!ramIsDetected">· preview</span>
+              <span class="muted small" x-show="ramIsDetected && system.unified_memory_gb">· your Mac</span>
+            </span>
+          </div>
+
+          <div class="ram-slider-row">
+            <input class="ram-slider" type="range" min="8" max="512" step="1"
+                   :value="ramGb" @input="setRam($event.target.value)"
+                   aria-label="Unified memory budget in GB">
+            <div class="ram-entry">
+              <input class="ram-num" type="number" min="1" max="1024" step="1"
+                     :value="ramGb" @input="setRam($event.target.value)"
+                     aria-label="Unified memory budget (number)">
+              <span class="muted small">GB</span>
+            </div>
+            <button class="ghost small ram-reset" x-show="system.unified_memory_gb && !ramIsDetected"
+                    @click="resetRamToDetected()" title="Snap back to your Mac's detected RAM">
+              ↩ My Mac (<span x-text="system.unified_memory_gb"></span> GB)
+            </button>
+          </div>
+
+          <div class="ram-tiers">
+            <template x-for="t in ramTiers" :key="t">
+              <button class="chip ram-tier" :class="{ active: ramGb === t }"
+                      @click="setRam(t)" x-text="t + ' GB'"></button>
+            </template>
+          </div>
+
+          <p class="muted small ram-planner-note">
+            Drag, type, or tap a tier to preview a machine — every fit chip and the picks below re-score instantly.
+          </p>
+        </div>
+
+        <!-- ─── ✨ Best for your RAM — live, per-lane recommendations ─── -->
+        <div class="best-picks" x-show="bestPicks().length" x-cloak>
+          <div class="best-picks-head">
+            <h2>✨ Best for <span x-text="ramGb"></span> GB</h2>
+            <span class="muted small">The highest-quality model in each lane that fits your budget — updates as you move the slider. Click a card to find it below.</span>
+          </div>
+          <div class="best-picks-grid">
+            <template x-for="p in bestPicks()" :key="p.id">
+              <article class="best-pick-card"
+                       @click="modelSearch = p.model.repo; fitFilter = 'all'"
+                       :title="'Find ' + p.model.label + ' in the list below'">
+                <div class="best-pick-lane"><span x-text="p.icon"></span> <span x-text="p.label"></span></div>
+                <div class="best-pick-model" x-text="p.model.label"></div>
+                <div class="best-pick-meta">
+                  <span class="chip" :class="p.model.cache?.state==='cached' ? 'ok' : (p.model.cache?.state==='partial' ? 'warn' : '')"
+                        x-text="p.model.cache?.state==='cached' ? '✓ cached' : (p.model.cache?.state==='partial' ? '⏳ partial' : 'not downloaded')"></span>
+                  <span class="chip" :class="'fit-' + fitFor(p.model.min_unified_memory_gb).state"
+                        x-text="fitFor(p.model.min_unified_memory_gb).label"></span>
+                  <span class="muted small" x-text="p.model.size_gb + ' GB · ≥' + p.model.min_unified_memory_gb + ' GB'"></span>
+                </div>
+              </article>
+            </template>
+          </div>
         </div>
       </div>
 
@@ -243,7 +310,7 @@
                     <span class="chip starter" x-show="m.is_starter">starter</span>
                     <span class="chip coder" x-show="m.is_coder">code</span>
                     <span class="chip reasoning" x-show="m.is_reasoning">reasoning</span>
-                    <span class="chip" x-show="m.fit && m.fit.state" :class="'fit-' + (m.fit?.state || 'unknown')" :title="m.fit?.hint" x-text="m.fit?.label"></span>
+                    <span class="chip" x-show="m.min_unified_memory_gb" :class="'fit-' + fitFor(m.min_unified_memory_gb).state" :title="fitFor(m.min_unified_memory_gb).hint" x-text="fitFor(m.min_unified_memory_gb).label"></span>
                   </h3>
                   <p class="repo"><code x-text="m.repo"></code></p>
                   <p class="size-line">
