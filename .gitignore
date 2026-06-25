@@ -1,0 +1,23 @@
+conda_env/
+cache/
+logs/
+app/__pycache__/
+app/backend/__pycache__/
+app/backend/settings.json
+*.pyc
+.DS_Store
+
+# Per-machine launchd startup-service marker (install_service.sh)
+service/
+
+# AI agent/IDE config — workstation-specific
+.clinerules
+.cursorrules
+.geminiignore
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+QWEN.md
+
+

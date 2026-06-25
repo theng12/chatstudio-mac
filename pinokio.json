@@ -1,0 +1,12 @@
+{
+  "version": "3.6",
+  "title": "Chat Studio KH",
+  "description": "Apple Silicon local LLM chat via MLX — OpenAI-compatible API, runs as a background service. Catalog of mlx-community quantized chat models (Llama, Qwen, Mistral, Gemma, Phi, DeepSeek).",
+  "icon": "icon.png",
+  "platform": ["darwin"],
+  "arch": ["arm64"],
+  "links": {
+    "documentation": "README.md"
+  },
+  "tags": ["llm", "chat", "mlx", "mac"]
+}

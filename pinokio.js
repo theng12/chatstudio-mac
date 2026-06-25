@@ -1,0 +1,103 @@
+module.exports = {
+  version: "3.6",
+  title: "Chat Studio KH",
+  description: "Apple Silicon local LLM chat via MLX — OpenAI-compatible API, runs as a background service.",
+  icon: "icon.png",
+  menu: async (kernel, info) => {
+    const installed = info.exists("conda_env")
+    // Always-on launchd service installed? (marker dropped by install_service.sh)
+    const serviceInstalled = info.exists("service/.installed")
+    const servicePort = 47871
+    // Offered in the normal (non-service) menus so the user can convert to a
+    // background service. When the service IS installed we return a dedicated
+    // "service mode" menu below instead.
+    const serviceItem = { icon: "fa-solid fa-heart-pulse", text: "Install as Startup Service", href: "service.js" }
+    const running = {
+      install: info.running("install.js"),
+      start: info.running("start.js"),
+      update: info.running("update.js"),
+      reset: info.running("reset.js")
+    }
+
+    if (running.install) {
+      return [{ default: true, icon: "fa-solid fa-plug", text: "Installing", href: "install.js" }]
+    }
+    if (running.update) {
+      return [{ default: true, icon: "fa-solid fa-rotate", text: "Updating", href: "update.js" }]
+    }
+    if (running.reset) {
+      return [{ default: true, icon: "fa-solid fa-broom", text: "Resetting", href: "reset.js" }]
+    }
+
+    if (!installed) {
+      return [{ default: true, icon: "fa-solid fa-plug", text: "Install", href: "install.js" }]
+    }
+
+    // ── Service mode ──
+    // The launchd service runs the server itself (on the fixed port), so Pinokio
+    // doesn't "see" it as running. Show a dedicated menu: open the running UI,
+    // check status, restart, view logs, uninstall — and NO "Start" button (that
+    // would fight the service for the port). Convert back by uninstalling.
+    if (serviceInstalled) {
+      const cb = Date.now()
+      const svcUrl = `http://localhost:${servicePort}`
+      return [
+        { default: true, icon: "fa-solid fa-rocket", text: "Open UI (service)", href: `${svcUrl}/?_cb=${cb}` },
+        { icon: "fa-solid fa-arrow-up-right-from-square",
+          text: `Port ${servicePort} · Open in Browser`,
+          href: "open_external.js", params: { url: svcUrl } },
+        { icon: "fa-solid fa-stethoscope", text: "Check Service Status", href: "service_status.js" },
+        { icon: "fa-solid fa-rotate-right", text: "Restart Service", href: "service_restart.js" },
+        { icon: "fa-solid fa-screwdriver-wrench", text: "Repair · take over port", href: "service.js" },
+        { icon: "fa-solid fa-folder-open", text: "Service Logs", href: "logs/service?fs=true" },
+        { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
+        { icon: "fa-regular fa-circle-xmark", text: "Uninstall Startup Service", href: "unservice.js" },
+        { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" }
+      ]
+    }
+
+    if (running.start) {
+      const local = info.local("start.js")
+      if (local && local.url) {
+        // Cache-bust so Pinokio's embedded webview can't keep serving a stale
+        // index.html / app.js from a previous launch. menu() is re-run every
+        // time Pinokio refreshes the sidebar, so this gives a fresh URL each
+        // refresh — clicking "Open UI" always loads a unique URL.
+        const cb = Date.now()
+        const bust = `?_cb=${cb}`
+        // Browser-friendly URL: 0.0.0.0 is server-bind, not client-reachable —
+        // the external browser needs localhost. Also pluck the port for compact
+        // display in the sidebar so the user can always SEE which port is live.
+        const browserUrl = local.url.replace("0.0.0.0", "localhost")
+        const portMatch = local.url.match(/:(\d+)/)
+        const port = portMatch ? portMatch[1] : "?"
+        return [
+          { default: true, icon: "fa-solid fa-rocket", text: "Open UI", href: `${local.url}/${bust}` },
+          { icon: "fa-solid fa-comments", text: "Chat", href: `${local.url}/${bust}#/chat` },
+          { icon: "fa-solid fa-cube", text: "Models", href: `${local.url}/${bust}#/models` },
+          // ── Escape hatch ──
+          // Always-visible port + one-click open in system default browser.
+          // Pinokio's embedded webview occasionally caches a black/blank
+          // screen — this lets the user keep working in Chrome/Safari.
+          { icon: "fa-solid fa-arrow-up-right-from-square",
+            text: `Port ${port} · Open in Browser`,
+            href: "open_external.js",
+            params: { url: browserUrl } },
+          { icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
+          { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
+          serviceItem
+        ]
+      }
+      return [{ default: true, icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" }]
+    }
+
+    return [
+      { default: true, icon: "fa-solid fa-power-off", text: "Start", href: "start.js" },
+      { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
+      serviceItem,
+      { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
+      { icon: "fa-solid fa-plug", text: "Reinstall", href: "install.js" },
+      { icon: "fa-regular fa-circle-xmark", text: "Reset", href: "reset.js" }
+    ]
+  }
+}

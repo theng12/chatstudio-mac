@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat Studio KH</title>
+  <!-- Cache-busters: __APP_VERSION__ is substituted server-side and bumps on
+       every release so Pinokio's webview can't serve stale assets. -->
+  <link rel="stylesheet" href="/assets/style.css?v=__APP_VERSION__" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <!-- app.js MUST load before alpine.min.js so studio() exists at x-data eval. -->
+  <script defer src="/assets/app.js?v=__APP_VERSION__"></script>
+  <script defer src="/assets/alpine.min.js?v=__APP_VERSION__"></script>
+</head>
+<body x-data="studio()" x-init="init()">
+
+  <!-- ─────────── TOPBAR ─────────── -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="240" y1="220" x2="800" y2="690" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#46ECC6"/><stop offset="0.55" stop-color="#37C7D8"/><stop offset="1" stop-color="#3D7BFF"/>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="1024" height="1024" rx="232" fill="#0f2329"/>
+        <path d="M332 232 L692 232 Q812 232 812 352 L812 540 Q812 660 692 660 L470 660 L360 786 L372 660 L332 660 Q212 660 212 540 L212 352 Q212 232 332 232 Z" fill="url(#lg)"/>
+        <circle cx="382" cy="446" r="47" fill="#0B2126"/><circle cx="512" cy="446" r="47" fill="#0B2126"/><circle cx="642" cy="446" r="47" fill="#0B2126"/>
+      </svg>
+      <span class="brand-name">Chat Studio</span>
+      <span class="brand-tag">Apple Silicon · MLX</span>
+    </div>
+
+    <nav class="tabs">
+      <button :class="{active: tab==='chat'}" @click="go('chat')">💬 Chat</button>
+      <button :class="{active: tab==='models'}" @click="go('models')">🧊 Models</button>
+      <button :class="{active: tab==='downloads'}" @click="go('downloads')">
+        ⬇ Downloads
+        <span class="badge" x-show="activeDownloadCount > 0" x-text="activeDownloadCount" x-cloak></span>
+      </button>
+      <button :class="{active: tab==='api'}" @click="go('api')">🔌 API</button>
+      <button :class="{active: tab==='settings'}" @click="go('settings')">⚙ Settings</button>
+    </nav>
+
+    <div class="status">
+      <span class="dot" :class="health.ok ? 'ok' : 'bad'"></span>
+      <span x-text="health.ok ? 'online' : 'offline'"></span>
+    </div>
+  </header>
+
+  <!-- ═════════════ CHAT ═════════════ -->
+  <main x-show="tab==='chat'" class="page chatpage" x-cloak>
+
+    <!-- engine missing -->
+    <template x-if="!diag.available">
+      <div style="padding:26px 22px;">
+        <div class="banner warn">
+          <span class="b-ico">⚠️</span>
+          <div>
+            <strong>MLX engine not available.</strong>
+            <span class="muted" x-text="diag.error || 'mlx / mlx_lm are not importable yet — run Install / Reinstall from the Pinokio sidebar.'"></span>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- no models -->
+    <template x-if="diag.available && chatModels.length === 0">
+      <div class="chat-empty">
+        <span class="big-ico">🧊</span>
+        <h3>No models downloaded yet</h3>
+        <p class="muted">Head to the Models tab and download one — <strong>Llama 3.2 3B</strong> or <strong>Gemma 4 E2B</strong> are great first picks.</p>
+        <p style="margin-top:16px;"><button class="primary" @click="go('models')">Browse models →</button></p>
+      </div>
+    </template>
+
+    <!-- chat surface -->
+    <template x-if="diag.available && chatModels.length > 0">
+      <div class="chatpage" style="flex:1; min-height:0;">
+        <div class="chat-head">
+          <div class="model-select">
+            <span class="muted small">Model</span>
+            <select x-model="selectedRepo" @change="onPickModel()">
+              <template x-for="m in chatModels" :key="m.repo">
+                <option :value="m.repo" x-text="m.label"></option>
+              </template>
+            </select>
+            <span class="load-state" :class="loadingModel ? 'loading' : (currentRepo===selectedRepo ? 'ok':'')">
+              <span x-show="loadingModel" x-cloak>● loading…</span>
+              <span x-show="!loadingModel && currentRepo===selectedRepo" x-cloak>● ready</span>
+            </span>
+            <button class="primary small" x-show="selectedRepo && currentRepo!==selectedRepo && !loadingModel" x-cloak @click="loadModel(selectedRepo)">Load</button>
+          </div>
+          <div class="spacer"></div>
+          <button class="ghost small" @click="newChat()" title="Clear the conversation">✦ New chat</button>
+          <button class="ghost small params-toggle" @click="showParams=!showParams">⚙ Params</button>
+        </div>
+
+        <!-- params popover -->
+        <div class="params-pop" x-show="showParams" x-cloak @click.outside="showParams=false">
+          <h4>Generation</h4>
+          <div class="field">
+            <label>Temperature <span class="val" x-text="gen.temperature.toFixed(2)"></span></label>
+            <input type="range" min="0" max="1.5" step="0.05" x-model.number="gen.temperature" @change="saveGen()">
+          </div>
+          <div class="field">
+            <label>Max tokens <span class="val" x-text="gen.maxTokens"></span></label>
+            <input type="range" min="128" max="4096" step="128" x-model.number="gen.maxTokens" @change="saveGen()">
+          </div>
+          <div class="field">
+            <label>Top-p <span class="val" x-text="gen.topP.toFixed(2)"></span></label>
+            <input type="range" min="0.1" max="1" step="0.05" x-model.number="gen.topP" @change="saveGen()">
+          </div>
+          <p class="hint">A system prompt can be set in <a @click="showParams=false; go('settings')" style="cursor:pointer">Settings</a>.</p>
+        </div>
+
+        <!-- thread -->
+        <div class="chat-thread" x-ref="thread">
+          <div class="thread-inner">
+            <div class="chat-empty" x-show="messages.length === 0" style="margin:40px auto;">
+              <span class="big-ico">💬</span>
+              <h3 x-text="currentRepo ? 'Ready when you are' : 'Pick a model above'"></h3>
+              <p class="muted" x-text="currentRepo ? 'Type a message below to start chatting.' : 'Choose a model from the dropdown — it loads on selection.'"></p>
+            </div>
+
+            <template x-for="(m, i) in messages" :key="i">
+              <div class="msg-row" :class="m.role">
+                <div class="avatar" :class="m.role" x-text="m.role==='user' ? 'You' : '✦'"></div>
+                <div style="min-width:0;">
+                  <div class="bubble" x-html="renderMarkdown(m.content)"></div>
+                  <div class="msg-meta" x-show="m.meta" x-text="m.meta"></div>
+                </div>
+              </div>
+            </template>
+
+            <div class="msg-row assistant" x-show="streaming" x-cloak>
+              <div class="avatar assistant">✦</div>
+              <div style="min-width:0;">
+                <div class="bubble"><span x-html="renderMarkdown(streamingText)"></span><span class="cursor"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- composer -->
+        <div class="composer">
+          <div class="composer-inner">
+            <textarea x-ref="composer" x-model="draft" rows="1"
+                      :disabled="!currentRepo || streaming"
+                      :placeholder="currentRepo ? 'Message ' + shortName(currentRepo) + '…' : 'Load a model to start…'"
+                      @input="autogrow()"
+                      @keydown.enter="onEnter($event)"></textarea>
+            <button x-show="!streaming" class="primary send" :disabled="!currentRepo || !draft.trim()" @click="sendMessage()">Send</button>
+            <button x-show="streaming" x-cloak class="stop" @click="stopGen()">■ Stop</button>
+          </div>
+          <div class="composer-hint">
+            <span>Enter to send · Shift+Enter for newline</span>
+            <span x-show="currentRepo" x-cloak>temp <span x-text="gen.temperature.toFixed(2)"></span> · max <span x-text="gen.maxTokens"></span> tok</span>
+          </div>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <!-- ═════════════ MODELS ═════════════ -->
+  <main x-show="tab==='models'" class="page scroll" x-cloak>
+    <div class="container">
+      <div class="page-head">
+        <h1>Models</h1>
+        <p class="muted">Curated MLX-ready chat models from <code>mlx-community</code> — already quantized, no conversion needed. Gemma sizes are real on-disk totals; others are 4-bit estimates.</p>
+        <div class="your-mac-banner" x-show="system.unified_memory_gb" x-cloak>
+          <span class="your-mac-icon">🖥</span>
+          <span>Your Mac: <strong x-text="system.chip || 'Apple Silicon'"></strong> · <strong><span x-text="system.unified_memory_gb"></span> GB</strong> unified memory</span>
+        </div>
+      </div>
+
+      <template x-for="family in orderedFamilies()" :key="family.id">
+        <section class="family">
+          <div class="family-head">
+            <h2><span x-text="family.label"></span> <span class="fam-count" x-text="(modelsByFamily[family.id]||[]).length + ' models'"></span></h2>
+            <p class="muted" x-text="family.summary"></p>
+          </div>
+          <details class="how">
+            <summary>How to use this family</summary>
+            <p x-text="family.how_to_use"></p>
+            <p class="muted small" x-show="family.context_note" x-text="family.context_note"></p>
+          </details>
+
+          <div class="model-list">
+            <template x-for="m in (modelsByFamily[family.id] || [])" :key="m.repo">
+              <article class="model-card" :class="{cached: m.cache.state === 'cached'}">
+                <div class="model-meta">
+                  <h3>
+                    <span x-text="m.label"></span>
+                    <span class="chip" :class="m.cache.state==='cached' ? 'ok' : (m.cache.state==='partial' ? 'warn' : '')"
+                          x-text="m.cache.state==='cached' ? '✓ cached' : (m.cache.state==='partial' ? '⏳ partial' : 'not downloaded')"></span>
+                    <span class="chip starter" x-show="m.is_starter">starter</span>
+                    <span class="chip coder" x-show="m.is_coder">code</span>
+                    <span class="chip reasoning" x-show="m.is_reasoning">reasoning</span>
+                    <span class="chip" x-show="m.fit && m.fit.state" :class="'fit-' + (m.fit?.state || 'unknown')" :title="m.fit?.hint" x-text="m.fit?.label"></span>
+                  </h3>
+                  <p class="repo"><code x-text="m.repo"></code></p>
+                  <p class="size-line">
+                    <span class="size-big" x-text="m.size_gb + ' GB'"></span>
+                    <span class="muted" x-text="m.size_gb_approximate ? 'approx. download' : 'download'"></span>
+                    · <span class="muted" x-text="'≥' + m.min_unified_memory_gb + ' GB RAM'"></span>
+                    · <span class="muted" x-text="m.params_b + 'B · ' + m.quant"></span>
+                  </p>
+                  <p class="hw muted" x-text="m.recommended_hardware"></p>
+                  <p class="best-for" x-text="m.best_for"></p>
+                </div>
+                <div class="model-actions">
+                  <template x-if="m.cache.state === 'cached'">
+                    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                      <span class="ok-text">✓ downloaded</span>
+                      <button class="primary small" @click="loadFromModels(m.repo)">💬 Chat with this</button>
+                    </div>
+                  </template>
+                  <template x-if="m.cache.state !== 'cached' && !m.active_download">
+                    <button class="primary" @click="startDownload(m.repo)">⬇ Download</button>
+                  </template>
+                  <template x-if="m.active_download">
+                    <div class="dl-inline">
+                      <div class="bar"><div class="bar-fill" :style="`width:${m.active_download.percent || 0}%`"></div></div>
+                      <small x-text="(m.active_download.percent || 0).toFixed(0) + '%'"></small>
+                      <button class="link danger" @click="cancelDownload(m.active_download.id)">cancel</button>
+                    </div>
+                  </template>
+                </div>
+              </article>
+            </template>
+          </div>
+        </section>
+      </template>
+    </div>
+  </main>
+
+  <!-- ═════════════ DOWNLOADS ═════════════ -->
+  <main x-show="tab==='downloads'" class="page scroll" x-cloak>
+    <div class="container">
+      <div class="page-head">
+        <h1>Downloads</h1>
+        <p class="muted">Live state across all download jobs since the server started.</p>
+      </div>
+      <div class="model-list">
+        <template x-for="j in jobs" :key="j.id">
+          <article class="model-card">
+            <div class="model-meta" style="flex:1;">
+              <h3><code x-text="j.repo"></code> <span class="chip" :class="j.state==='done'?'ok':(j.state==='error'?'warn':'')" x-text="j.state"></span></h3>
+              <small x-show="j.error" class="faint" x-text="j.error"></small>
+              <div class="bar" style="margin-top:8px;"><div class="bar-fill" :style="`width:${j.percent || 0}%`"></div></div>
+            </div>
+            <div class="model-actions">
+              <button class="link danger" x-show="['queued','running','cancelling'].includes(j.state)" @click="cancelDownload(j.id)">cancel</button>
+            </div>
+          </article>
+        </template>
+        <p x-show="jobs.length === 0" class="muted">No downloads yet. Pick a model in the Models tab to start one.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═════════════ API ═════════════ -->
+  <main x-show="tab==='api'" class="page scroll" x-cloak>
+    <div class="container">
+      <div class="page-head">
+        <h1>API</h1>
+        <p class="muted">This server speaks the <strong>OpenAI API</strong>, so any OpenAI-compatible client points at it as a drop-in. It also has a simpler native API.</p>
+      </div>
+
+      <!-- base URL -->
+      <section class="card">
+        <h3>OpenAI-compatible base URL</h3>
+        <p class="card-sub">Paste this as the “Base URL / API Base” in Continue.dev, Open WebUI, Cursor, the OpenAI SDK, etc. Any non-empty API key works (it’s ignored).</p>
+        <div class="url-box">
+          <code x-text="apiBase + '/v1'"></code>
+          <button class="small copy" :class="{ 'copy-ok': copied==='base' }" @click="copy(apiBase + '/v1','base')" x-text="copied==='base' ? '✓ copied' : 'Copy'"></button>
+        </div>
+        <div class="tool-grid" style="margin-top:14px;">
+          <div class="tool-card">
+            <h4>Continue.dev / Cursor</h4>
+            <p>Provider: <code>openai</code></p>
+            <p>API base: <code x-text="apiBase + '/v1'"></code></p>
+            <p>Model: a downloaded repo id (see below)</p>
+          </div>
+          <div class="tool-card">
+            <h4>Open WebUI</h4>
+            <p>Connections → OpenAI API</p>
+            <p>URL: <code x-text="apiBase + '/v1'"></code></p>
+            <p>Key: any value, e.g. <code>sk-local</code></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- reachable addresses -->
+      <section class="card" x-show="conn.addresses && conn.addresses.length" x-cloak>
+        <h3>Reach it from other devices</h3>
+        <p class="card-sub">Same Mac uses <code>localhost</code>. From your phone/laptop over LAN or Tailscale, use one of these (port <span x-text="conn.bind_port"></span>):</p>
+        <template x-for="a in conn.addresses" :key="a.ip">
+          <div class="addr-row">
+            <span class="addr-kind" :class="a.kind" x-text="a.kind"></span>
+            <code style="flex:1" x-text="'http://' + a.ip + ':' + conn.bind_port + '/v1'"></code>
+            <button class="small copy" :class="{ 'copy-ok': copied==='ip-'+a.ip }" @click="copy('http://'+a.ip+':'+conn.bind_port+'/v1','ip-'+a.ip)" x-text="copied==='ip-'+a.ip ? '✓' : 'Copy'"></button>
+          </div>
+        </template>
+      </section>
+
+      <!-- snippets -->
+      <section class="card">
+        <h3>Quick start</h3>
+        <p class="card-sub">Using model <code x-text="snippetModel()"></code><span x-show="!currentRepo && cachedRepos().length===0" class="faint"> (download a model first)</span></p>
+        <div class="snippet-tabs">
+          <button :class="{active: lang==='curl'}" @click="lang='curl'">cURL</button>
+          <button :class="{active: lang==='python'}" @click="lang='python'">Python</button>
+          <button :class="{active: lang==='js'}" @click="lang='js'">JavaScript</button>
+        </div>
+        <div class="snippet">
+          <button class="small copy" :class="{ 'copy-ok': copied==='snip' }" @click="copy(snippet(), 'snip')" x-text="copied==='snip' ? '✓ copied' : 'Copy'"></button>
+          <pre x-text="snippet()"></pre>
+        </div>
+      </section>
+
+      <!-- endpoint reference -->
+      <section class="card">
+        <h3>Endpoint reference</h3>
+        <div class="tool-grid">
+          <div class="tool-card">
+            <h4>OpenAI-compatible</h4>
+            <p><code>GET /v1/models</code></p>
+            <p><code>POST /v1/chat/completions</code></p>
+          </div>
+          <div class="tool-card">
+            <h4>Native</h4>
+            <p><code>GET /api/catalog</code> · <code>GET /api/chat/models</code></p>
+            <p><code>POST /api/chat/load</code> <span class="faint">{repo}</span></p>
+            <p><code>POST /api/chat/completions</code> <span class="faint">{repo,messages,…}</span></p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ═════════════ SETTINGS ═════════════ -->
+  <main x-show="tab==='settings'" class="page scroll" x-cloak>
+    <div class="container">
+      <div class="page-head"><h1>Settings</h1></div>
+
+      <!-- generation defaults -->
+      <section class="card">
+        <h3>Chat defaults</h3>
+        <p class="card-sub">Applied to every message in the Chat tab. Saved in this browser.</p>
+        <div class="field">
+          <label>System prompt <span class="faint">optional</span></label>
+          <textarea x-model="gen.system" @change="saveGen()" placeholder="e.g. You are a concise, friendly assistant. Use Markdown."></textarea>
+          <p class="hint">Sent as a system instruction. On models without a system role (Gemma), it’s merged into your first message automatically.</p>
+        </div>
+        <div class="card-row" style="gap:24px;">
+          <div class="field" style="flex:1; min-width:180px;">
+            <label>Temperature <span class="val" x-text="gen.temperature.toFixed(2)"></span></label>
+            <input type="range" min="0" max="1.5" step="0.05" x-model.number="gen.temperature" @change="saveGen()">
+          </div>
+          <div class="field" style="flex:1; min-width:180px;">
+            <label>Max tokens <span class="val" x-text="gen.maxTokens"></span></label>
+            <input type="range" min="128" max="4096" step="128" x-model.number="gen.maxTokens" @change="saveGen()">
+          </div>
+          <div class="field" style="flex:1; min-width:180px;">
+            <label>Top-p <span class="val" x-text="gen.topP.toFixed(2)"></span></label>
+            <input type="range" min="0.1" max="1" step="0.05" x-model.number="gen.topP" @change="saveGen()">
+          </div>
+        </div>
+        <button class="ghost small" @click="resetGen()">Reset to defaults</button>
+      </section>
+
+      <!-- HF token -->
+      <section class="card">
+        <h3>Hugging Face token</h3>
+        <p class="card-sub">Optional — needed for gated repos and to lift anonymous rate limits while downloading.</p>
+        <div class="card-row">
+          <input type="text" style="flex:1; min-width:220px;" x-model="hfTokenInput" placeholder="hf_…"
+                 class="" />
+          <button class="primary" @click="saveSettings()">Save</button>
+          <button class="ghost" @click="testToken()">Test</button>
+        </div>
+        <p class="hint" x-show="settings.hf_token_set" x-cloak x-text="'Saved token: ' + settings.hf_token_masked"></p>
+        <p class="test-result" :class="tokenTest.ok ? 'ok':'err'" x-show="tokenTest.msg" x-cloak x-text="tokenTest.msg"></p>
+      </section>
+
+      <!-- engine diagnostics -->
+      <section class="card">
+        <h3>Engine</h3>
+        <p class="card-sub">
+          <span class="chip" :class="diag.available ? 'ok':'warn'" x-text="diag.available ? 'MLX ready' : 'not ready'"></span>
+          <span x-show="diag.loaded_model" x-cloak class="muted">· loaded: <code x-text="diag.loaded_model"></code></span>
+        </p>
+        <template x-for="p in (diag.packages || [])" :key="p.package">
+          <div class="pkg-row">
+            <span class="pkg-dot" :class="p.installed ? 'on':'off'"></span>
+            <span class="pkg-name" x-text="p.package"></span>
+            <span class="pkg-ver" x-text="p.version || (p.installed ? 'installed' : 'missing')"></span>
+            <span class="pkg-role" x-text="p.role"></span>
+          </div>
+        </template>
+      </section>
+
+      <!-- server -->
+      <section class="card">
+        <h3>Server</h3>
+        <div class="kv"><span class="k">Port</span><span class="v" x-text="conn.bind_port || '—'"></span></div>
+        <div class="kv"><span class="k">Bind host</span><span class="v" x-text="conn.bind_host || '—'"></span></div>
+        <div class="kv"><span class="k">Model cache</span><span class="v" x-text="health.hf_home || '—'"></span></div>
+        <div class="card-row" style="margin-top:10px;">
+          <button class="ghost small" @click="refreshAll()">↻ Refresh status</button>
+        </div>
+      </section>
+
+      <p class="footer-version">Chat Studio KH · v<span x-text="appVersion"></span></p>
+    </div>
+  </main>
+
+</body>
+</html>

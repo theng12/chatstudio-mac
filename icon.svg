@@ -1,0 +1,48 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14393F"/>
+      <stop offset="1" stop-color="#081519"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="440" r="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2BD0C0" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#2BD0C0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bubble" x1="240" y1="220" x2="800" y2="690" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46ECC6"/>
+      <stop offset="0.55" stop-color="#37C7D8"/>
+      <stop offset="1" stop-color="#3D7BFF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded-square app background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#glow)"/>
+
+  <!-- speech bubble (body + tail as one continuous shape) -->
+  <path d="
+      M 332 232
+      L 692 232
+      Q 812 232 812 352
+      L 812 540
+      Q 812 660 692 660
+      L 470 660
+      L 360 786
+      L 372 660
+      L 332 660
+      Q 212 660 212 540
+      L 212 352
+      Q 212 232 332 232
+      Z" fill="url(#bubble)"/>
+
+  <!-- typing dots -->
+  <circle cx="382" cy="446" r="47" fill="#0B2126"/>
+  <circle cx="512" cy="446" r="47" fill="#0B2126"/>
+  <circle cx="642" cy="446" r="47" fill="#0B2126"/>
+
+  <!-- KH badge -->
+  <circle cx="822" cy="822" r="118" fill="#FFFFFF"/>
+  <text x="822" y="823" text-anchor="middle" dominant-baseline="central"
+        font-family="Helvetica, Arial, sans-serif" font-size="98" font-weight="700"
+        fill="#0F4A47">KH</text>
+</svg>
