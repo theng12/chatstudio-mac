@@ -10,6 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.7.0] — 2026-06-26
+
+### Added
+
+- **Live model fetch (ends model-id drift).** Each cloud provider now has a **Load all models (live)** button (Settings → Cloud providers) that pulls the provider's *current* `/models` catalog and adds it to the Chat dropdown — so you're never limited to (or stale against) the curated list. Public catalogs (HF Router, SambaNova) work with no key; key-required providers (GitHub, Groq, OpenRouter, …) fetch with your saved key. Loaded sets persist in the browser and can be cleared. New endpoint `GET /api/providers/{name}/models/live`.
+
+> Live lists can include a provider's paid models — usage is billed by the provider. The curated paid-model gate still applies to the built-in shortlist.
+
 ## [1.6.0] — 2026-06-26
 
 ### Added

@@ -379,6 +379,47 @@ def _mask(token: str) -> str:
     return "•" * len(token)
 
 
+_NON_CHAT_HINTS = (
+    "embedding", "whisper", "tts", "text-to-speech", "stable-diffusion",
+    "-image", "image-", "rerank", "moderation", "guard", "bge-", "-bge",
+    "clip", "transcribe", "audio", "vision-encoder",
+)
+
+
+async def list_live_models(provider: Provider) -> list[dict]:
+    """Fetch the provider's CURRENT model catalog from its OpenAI-compatible
+    `/models` endpoint, so the UI can show live models instead of a hardcoded
+    list (ends the model-id drift problem). The API key is sent when available
+    but isn't required for providers whose catalog is public. Obvious non-chat
+    models (embeddings, speech, image) are filtered out. Raises RuntimeError on
+    auth/HTTP errors so the caller can surface a clean message."""
+    url = f"{provider.base_url}/models"
+    headers = {"Accept": "application/json"}
+    api_key = get_api_key(provider.key)
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.get(url, headers=headers)
+    if r.status_code in (401, 403):
+        raise RuntimeError(f"{provider.name} requires an API key to list models.")
+    if r.status_code >= 400:
+        raise RuntimeError(f"{provider.name} returned HTTP {r.status_code}: {(r.text or '')[:160]}")
+    data = r.json()
+    items = data.get("data", data) if isinstance(data, dict) else data
+    out, seen = [], set()
+    for m in (items or []):
+        mid = m.get("id") if isinstance(m, dict) else (m if isinstance(m, str) else None)
+        if not mid or mid in seen:
+            continue
+        low = mid.lower()
+        if any(h in low for h in _NON_CHAT_HINTS):
+            continue
+        seen.add(mid)
+        out.append({"id": mid, "repo": repo_id(provider.key, mid)})
+    out.sort(key=lambda d: d["id"].lower())
+    return out
+
+
 async def stream_chat(
     provider: Provider,
     model: CloudModel,

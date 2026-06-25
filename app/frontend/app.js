@@ -31,6 +31,8 @@ function studio() {
     providerKeyInputs: {},
     providerSaving: null,
     providerTests: {},
+    liveModels: {},        // { providerKey: [{id, repo}] } fetched on demand
+    liveLoading: null,
     chatModels: [],
     currentRepo: null,
     selectedRepo: "",
@@ -57,6 +59,7 @@ function studio() {
     // ════════════ lifecycle ════════════
     async init() {
       this.loadGen();
+      this.loadLive();
       await this.refreshHealth();
       await this.refreshSystem();
       await this.refreshCatalog();
@@ -155,6 +158,24 @@ function studio() {
               notes: m.notes,
               key_set: p.key_set,
               free: m.free,
+            });
+          }
+        }
+        // Live-fetched models (loaded on demand per provider) — appended and
+        // deduped against curated, so the dropdown can reflect a provider's
+        // full current catalog instead of only the hardcoded list.
+        const provByKey = {};
+        for (const p of (prov.providers || [])) provByKey[p.key] = p;
+        const have = new Set(clouds.map(c => c.repo));
+        for (const [pkey, models] of Object.entries(this.liveModels || {})) {
+          const p = provByKey[pkey];
+          if (!p) continue;
+          for (const m of (models || [])) {
+            if (have.has(m.repo)) continue;
+            have.add(m.repo);
+            clouds.push({
+              repo: m.repo, label: m.id, source: 'cloud', provider: pkey,
+              provider_name: p.name, notes: 'live', key_set: p.key_set, free: true, live: true,
             });
           }
         }
@@ -498,6 +519,29 @@ function studio() {
         }
       } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
     },
+    async loadLiveModels(name) {
+      this.liveLoading = name;
+      try {
+        const r = await fetch(`${this.apiBase}/api/providers/${name}/models/live`);
+        const d = await r.json();
+        if (r.ok) {
+          this.liveModels[name] = d.models || [];
+          this.saveLive();
+          await this.refreshChatModels();
+          this.providerTests[name] = { ok: true, msg: `✓ Loaded ${d.count} live models` };
+        } else {
+          this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || "Failed to load models") };
+        }
+      } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
+      this.liveLoading = null;
+    },
+    clearLiveModels(name) {
+      delete this.liveModels[name];
+      this.saveLive();
+      this.refreshChatModels();
+    },
+    saveLive() { try { localStorage.setItem("chatstudio.live", JSON.stringify(this.liveModels)); } catch (e) {} },
+    loadLive() { try { const r = localStorage.getItem("chatstudio.live"); if (r) this.liveModels = JSON.parse(r) || {}; } catch (e) {} },
     async setProviderPaid(name, enabled) {
       try {
         const r = await fetch(`${this.apiBase}/api/providers/${name}/paid`, {

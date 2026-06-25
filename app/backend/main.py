@@ -325,6 +325,22 @@ def set_provider_key(name: str, body: ProviderKeyBody) -> dict:
     return {"ok": True, "providers": providers.public_view()}
 
 
+@app.get("/api/providers/{name}/models/live")
+async def provider_live_models(name: str) -> dict:
+    """Fetch the provider's current model catalog live from its /models
+    endpoint — so the dropdown can show what's actually available now instead
+    of the curated (drift-prone) list."""
+    if name not in providers.PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
+    try:
+        models = await providers.list_live_models(providers.PROVIDERS[name])
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Live model fetch failed: {e}")
+    return {"provider": name, "count": len(models), "models": models}
+
+
 @app.post("/api/providers/{name}/paid")
 def set_provider_paid(name: str, body: ProviderPaidBody) -> dict:
     """Opt in/out of a provider's paid models. When off, paid models are hidden
