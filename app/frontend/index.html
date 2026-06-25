@@ -82,8 +82,12 @@
           <div class="model-select">
             <span class="muted small">Model</span>
             <select x-model="selectedRepo" @change="onPickModel()">
-              <template x-for="m in chatModels" :key="m.repo">
-                <option :value="m.repo" x-text="(m.source==='cloud' ? '☁ ' : '') + m.label"></option>
+              <template x-for="g in groupedModels()" :key="g.label">
+                <optgroup :label="g.label">
+                  <template x-for="m in g.models" :key="m.repo">
+                    <option :value="m.repo" x-text="m.label"></option>
+                  </template>
+                </optgroup>
               </template>
             </select>
             <span class="load-state" :class="loadingModel ? 'loading' : (currentRepo===selectedRepo ? 'ok':'')">

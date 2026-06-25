@@ -10,6 +10,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.7.1] — 2026-06-26
+
+### Changed
+
+- The Chat model dropdown is now grouped with dividers: a **🖥 Local (MLX)** section and one **☁ <provider>** section per cloud provider, so local and cloud models are clearly separated.
+
 ## [1.7.0] — 2026-06-26
 
 ### Added

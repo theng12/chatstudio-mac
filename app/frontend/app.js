@@ -184,6 +184,23 @@ function studio() {
         if (loaded) this.currentRepo = loaded.repo;
       } catch (e) {}
     },
+    // Dropdown groups: a "Local (MLX)" optgroup, then one optgroup per cloud
+    // provider — so the <select> shows a clear divider between local and cloud.
+    groupedModels() {
+      const groups = [];
+      const locals = this.chatModels.filter(m => m.source === 'local');
+      if (locals.length) groups.push({ label: '🖥 Local (MLX)', models: locals });
+      const order = [];
+      const byProv = {};
+      for (const m of this.chatModels) {
+        if (m.source !== 'cloud') continue;
+        const k = m.provider || 'cloud';
+        if (!byProv[k]) { byProv[k] = { label: '☁ ' + (m.provider_name || 'Cloud'), models: [] }; order.push(k); }
+        byProv[k].models.push(m);
+      }
+      for (const k of order) groups.push(byProv[k]);
+      return groups;
+    },
     async refreshSettings() {
       try { this.settings = await (await fetch(`${this.apiBase}/api/settings`)).json(); } catch (e) {}
     },
