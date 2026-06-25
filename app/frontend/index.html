@@ -245,6 +245,10 @@
                     <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
                       <span class="ok-text">✓ downloaded</span>
                       <button class="primary small" @click="loadFromModels(m.repo)">💬 Chat with this</button>
+                      <button class="ghost small" :class="{active: gen.defaultModel===m.repo}"
+                              @click="setDefaultModel(gen.defaultModel===m.repo ? '' : m.repo)">
+                        <span x-text="gen.defaultModel===m.repo ? '★ Default' : '☆ Set default'"></span>
+                      </button>
                     </div>
                   </template>
                   <template x-if="m.cache.state !== 'cached' && !m.active_download">
@@ -397,6 +401,26 @@
   <main x-show="tab==='settings'" class="page scroll" x-cloak>
     <div class="container">
       <div class="page-head"><h1>Settings</h1></div>
+
+      <!-- default model -->
+      <section class="card">
+        <h3>Default model</h3>
+        <p class="card-sub">Auto-loaded on startup. Pick any downloaded model below.</p>
+        <div class="card-row">
+          <select x-model="gen.defaultModel" @change="saveGen()" style="flex:1; min-width:200px;">
+            <option value="">— None (pick manually) —</option>
+            <template x-for="m in cachedModelRepos()" :key="m.repo">
+              <option :value="m.repo" x-text="m.label"></option>
+            </template>
+          </select>
+          <button class="ghost small" @click="setDefaultModel('')" x-show="gen.defaultModel">Clear</button>
+        </div>
+        <p class="hint" x-show="gen.defaultModel">
+          <span class="chip ok" style="font-size:11px;">✓ Default: <span x-text="gen.defaultModel.split('/').pop()"></span></span>
+          — will load automatically on next server start
+        </p>
+        <p class="hint" x-show="!gen.defaultModel">No default — the Chat tab will start with the first model in the list.</p>
+      </section>
 
       <!-- generation defaults -->
       <section class="card">

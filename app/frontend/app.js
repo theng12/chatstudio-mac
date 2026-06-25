@@ -36,7 +36,7 @@ function studio() {
     _abort: null,
 
     // ── generation defaults (persisted in localStorage) ──
-    gen: { system: "", temperature: 0.7, maxTokens: 1024, topP: 1.0 },
+    gen: { system: "", temperature: 0.7, maxTokens: 1024, topP: 1.0, defaultModel: "" },
 
     // ── settings ──
     settings: { hf_token_set: false, hf_token_masked: "" },
@@ -59,6 +59,14 @@ function studio() {
       this.pickDefaultModel();
       this.pollDownloads();
       setInterval(() => this.refreshHealth(), 15000);
+      // Auto-load the default model on startup if it's cached
+      if (this.gen.defaultModel && this.diag.available) {
+        const cached = this.models.find(m => m.repo === this.gen.defaultModel && m.cache?.state === "cached");
+        if (cached && cached.repo !== this.currentRepo) {
+          this.selectedRepo = cached.repo;
+          await this.loadModel(cached.repo);
+        }
+      }
     },
 
     go(tab) {
@@ -398,7 +406,15 @@ function studio() {
       try { localStorage.setItem("chatstudio.gen", JSON.stringify(this.gen)); } catch (e) {}
     },
     resetGen() {
-      this.gen = { system: "", temperature: 0.7, maxTokens: 1024, topP: 1.0 };
+      const oldDefault = this.gen.defaultModel;
+      this.gen = { system: "", temperature: 0.7, maxTokens: 1024, topP: 1.0, defaultModel: oldDefault };
+      this.saveGen();
+    },
+    cachedModelRepos() {
+      return this.models.filter(m => m.cache?.state === "cached").map(m => ({ repo: m.repo, label: m.label }));
+    },
+    setDefaultModel(repo) {
+      this.gen.defaultModel = repo || "";
       this.saveGen();
     },
 
