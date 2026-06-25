@@ -443,6 +443,23 @@ const data = await res.json();
 console.log(data.choices[0].message.content);`;
     },
 
+    // ════════════ formatting helpers ════════════
+    formatBytes(b) {
+      if (!b || b <= 0) return "—";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let i = 0;
+      let v = b;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return v.toFixed(i === 0 ? 0 : 1) + " " + units[i];
+    },
+    formatDuration(s) {
+      if (!s || s <= 0 || !isFinite(s)) return "—";
+      if (s < 60) return Math.round(s) + "s";
+      if (s < 3600) return Math.floor(s / 60) + "m " + Math.round(s % 60) + "s";
+      const h = Math.floor(s / 3600);
+      return h + "h " + Math.floor((s % 3600) / 60) + "m";
+    },
+
     // ════════════ clipboard ════════════
     async copy(text, key) {
       try { await navigator.clipboard.writeText(text); }
