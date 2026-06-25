@@ -429,8 +429,11 @@ async def chat_completions(body: ChatCompletionsBody):
                     body.repo, messages, body.temperature, body.max_tokens, body.top_p,
                 ):
                     yield chunk
-            except RuntimeError as e:
-                yield f"\n[error] {e}\n"
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                print(f"[chat studio] stream error: {tb}", file=sys.stderr, flush=True)
+                yield f"\n[error] {type(e).__name__}: {e}\n\n{tb}\n"
 
         return StreamingResponse(event_stream(), media_type="text/plain")
 
