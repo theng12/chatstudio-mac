@@ -84,16 +84,18 @@ def _parse_preferred(repo: Optional[str]) -> Optional[Candidate]:
     return Candidate("local", "Local (MLX)", repo, "local")
 
 
-def build_candidates(preferred_repo: Optional[str], *, fallback: bool) -> list[Candidate]:
+def build_candidates(preferred_repo: Optional[str], *, fallback: bool, exclude: Optional[set] = None) -> list[Candidate]:
     """The ordered list of (provider, model) attempts. Preferred first; then —
     only when fallback is on — every other enabled, usable provider in priority
     order. Providers with no API key (cloud) or no cached model (local) are
-    skipped from the fallback chain."""
+    skipped from the fallback chain. `exclude` drops provider ids entirely
+    (used by "Continue with fallback" to skip the one that just broke)."""
+    exclude = exclude or set()
     cands: list[Candidate] = []
     seen: set[str] = set()
 
     pref = _parse_preferred(preferred_repo)
-    if pref:
+    if pref and pref.id not in exclude:
         cands.append(pref)
         seen.add(pref.id)
 
@@ -106,7 +108,7 @@ def build_candidates(preferred_repo: Optional[str], *, fallback: bool) -> list[C
     order += [k for k in known if k not in order]
 
     for pid in order:
-        if pid in seen:
+        if pid in seen or pid in exclude:
             continue
         if not app_settings.get_provider_enabled(pid):
             continue
@@ -297,8 +299,9 @@ async def generate(
     *,
     uninterrupted: bool,
     timeout: int,
+    exclude_ids: Optional[list] = None,
 ) -> AsyncIterator[dict]:
-    cands = build_candidates(preferred_repo, fallback=uninterrupted)
+    cands = build_candidates(preferred_repo, fallback=uninterrupted, exclude=set(exclude_ids or []))
     if not cands:
         yield {"type": "error", "detail": "No usable provider/model is configured."}
         return
@@ -338,7 +341,7 @@ async def generate(
                 # providers (would duplicate / lose context), so stop and let the
                 # UI offer a "Continue with fallback" (Phase 3).
                 if chars > 0:
-                    yield {"type": "interrupted", "provider": cand.name,
+                    yield {"type": "interrupted", "provider": cand.name, "provider_id": cand.id,
                            "detail": "Response was interrupted before it finished."}
                     return
                 if not uninterrupted:

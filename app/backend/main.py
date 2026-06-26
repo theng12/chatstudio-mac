@@ -154,6 +154,7 @@ class ChatCompletionsBody(BaseModel):
     max_tokens: int = 1024
     top_p: float = 1.0
     stream: bool = True
+    exclude_providers: list[str] = []   # "Continue with fallback": skip these provider ids
 
 
 class OpenAIChatCompletionsBody(BaseModel):
@@ -552,28 +553,30 @@ async def chat_completions(body: ChatCompletionsBody):
     if app_settings.get_uninterrupted():
         params = {"temperature": body.temperature, "max_tokens": body.max_tokens, "top_p": body.top_p}
         timeout = app_settings.get_request_timeout()
+        exclude = body.exclude_providers or []
         if body.stream:
             async def uninterrupted_stream():
                 meta = None
-                async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout):
+                async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout, exclude_ids=exclude):
                     t = ev.get("type")
                     if t == "chunk":
                         yield ev["text"]
                     elif t == "done":
                         meta = {"provider": ev["provider"], "model": ev["model"], "fallback": ev["fallback"]}
                     elif t == "interrupted":
-                        meta = {"interrupted": True, "provider": ev["provider"]}
-                        yield f"\n[interrupted] {ev['detail']}"
+                        # Stream broke AFTER text — keep the partial; the UI shows
+                        # a "Continue with fallback" button (no inline noise).
+                        meta = {"interrupted": True, "provider": ev["provider"], "provider_id": ev.get("provider_id")}
                     elif t == "error":
                         yield f"\n[error] {ev.get('detail', 'generation failed')}"
                 # Trailing metadata sentinel — the UI strips this and shows which
-                # provider answered / whether it fell back.
+                # provider answered / whether it fell back / was interrupted.
                 if meta is not None:
                     yield "\n__CHATSTUDIO_META__" + json.dumps(meta)
             return StreamingResponse(uninterrupted_stream(), media_type="text/plain")
         # non-streaming
         text, meta = "", None
-        async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout):
+        async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout, exclude_ids=exclude):
             t = ev.get("type")
             if t == "chunk":
                 text += ev["text"]

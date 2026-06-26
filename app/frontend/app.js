@@ -34,6 +34,8 @@ function studio() {
     // ── chat ──
     diag: { available: false, error: null, packages: [] },
     depInstall: { running: false, result: null },
+    continueState: null,   // {messageIndex, excludeIds, provider} when a stream broke mid-answer
+    continuing: false,
 
     // ── cloud providers ──
     providers: [],
@@ -428,7 +430,7 @@ function studio() {
       this.selectedRepo = repo;
       if (repo !== this.currentRepo) this.loadModel(repo);
     },
-    newChat() { this.stopGen(); this.messages = []; this.streamingText = ""; },
+    newChat() { this.stopGen(); this.messages = []; this.streamingText = ""; this.continueState = null; },
 
     // ════════════ chat send / stream ════════════
     onEnter(e) {
@@ -445,6 +447,7 @@ function studio() {
     async sendMessage() {
       const text = this.draft.trim();
       if (!text || !this.currentRepo || this.streaming) return;
+      this.continueState = null;   // a new message supersedes any pending "continue"
       this.messages.push({ role: "user", content: text });
       this.draft = "";
       this.autogrow();
@@ -519,10 +522,71 @@ function studio() {
       const tps = secs > 0 ? (approxTok / secs).toFixed(1) : "—";
       let prefix = "";
       if (providerMeta && providerMeta.provider) {
-        prefix = "via " + providerMeta.provider + (providerMeta.fallback ? " ⤵ fell back" : "") + " · ";
+        prefix = (providerMeta.interrupted ? "⚠ interrupted on " : "via ") + providerMeta.provider
+               + (providerMeta.fallback ? " ⤵ fell back" : "") + " · ";
       }
       const meta = prefix + `~${approxTok} tok · ${secs.toFixed(1)}s · ~${tps} tok/s` + (stopped ? " · stopped" : "");
-      if ((content || "").trim()) this.messages.push({ role: "assistant", content, meta });
+      if ((content || "").trim()) {
+        this.messages.push({ role: "assistant", content, meta });
+        if (providerMeta && providerMeta.interrupted) {
+          this.continueState = {
+            messageIndex: this.messages.length - 1,
+            excludeIds: providerMeta.provider_id ? [providerMeta.provider_id] : [],
+            provider: providerMeta.provider,
+          };
+        }
+      }
+    },
+    async continueGeneration() {
+      if (!this.continueState || this.streaming || this.continuing) return;
+      const st = this.continueState;
+      this.continueState = null;
+      this.continuing = true;
+      const idx = st.messageIndex;
+      const base = this.messages[idx].content + "\n";
+      // Send conversation up to + including the partial answer, then a hidden
+      // "continue" instruction, excluding the provider that just broke.
+      const payloadMsgs = [];
+      if (this.gen.system && this.gen.system.trim()) payloadMsgs.push({ role: "system", content: this.gen.system.trim() });
+      for (let i = 0; i <= idx; i++) payloadMsgs.push({ role: this.messages[i].role, content: this.messages[i].content });
+      payloadMsgs.push({ role: "user", content: "Continue your previous response from exactly where it stopped. Do not repeat anything you already wrote." });
+
+      this._abort = new AbortController();
+      try {
+        const r = await fetch(`${this.apiBase}/api/chat/completions`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          signal: this._abort.signal,
+          body: JSON.stringify({
+            repo: this.currentRepo, messages: payloadMsgs,
+            temperature: this.gen.temperature, max_tokens: this.gen.maxTokens, top_p: this.gen.topP,
+            stream: true, exclude_providers: st.excludeIds,
+          }),
+        });
+        if (!r.ok || !r.body) { const e = await r.json().catch(() => ({})); alert(e.detail || "Continue failed"); return; }
+        const reader = r.body.getReader(); const decoder = new TextDecoder();
+        const MARK = "\n__CHATSTUDIO_META__";
+        let raw = "";
+        while (true) {
+          const { value, done } = await reader.read(); if (done) break;
+          raw += decoder.decode(value, { stream: true });
+          const mi = raw.indexOf(MARK);
+          this.messages[idx].content = base + (mi >= 0 ? raw.slice(0, mi) : raw);
+          this.scrollThread();
+        }
+        const mi = raw.indexOf(MARK); let meta = null, tail = raw;
+        if (mi >= 0) { try { meta = JSON.parse(raw.slice(mi + MARK.length)); } catch (e) {} tail = raw.slice(0, mi); }
+        this.messages[idx].content = base + tail;
+        if (meta && meta.provider) {
+          this.messages[idx].meta = (meta.interrupted ? "⚠ interrupted again on " : "continued via ") + meta.provider + (meta.fallback ? " ⤵" : "");
+          if (meta.interrupted) {
+            this.continueState = { messageIndex: idx, excludeIds: [...st.excludeIds, meta.provider_id].filter(Boolean), provider: meta.provider };
+          }
+        }
+      } catch (e) {
+        if (!(e && e.name === "AbortError")) alert(String(e));
+      } finally {
+        this.continuing = false; this._abort = null; this.scrollThread();
+      }
     },
     stopGen() {
       // Tell the server to stop generating (frees the GPU now), then abort the

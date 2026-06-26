@@ -157,6 +157,15 @@
           </div>
         </div>
 
+        <!-- continue-with-fallback (mid-stream interruption) -->
+        <div class="continue-banner" x-show="continueState && !continuing && !streaming" x-cloak>
+          <span>⚠ Reply was interrupted on <strong x-text="continueState && continueState.provider"></strong>.</span>
+          <span class="spacer" style="flex:1"></span>
+          <button class="primary small" @click="continueGeneration()">Continue with fallback →</button>
+          <button class="ghost small" @click="continueState=null">Dismiss</button>
+        </div>
+        <div class="continue-banner" x-show="continuing" x-cloak><span>Continuing with a fallback provider…</span></div>
+
         <!-- composer -->
         <div class="composer">
           <div class="composer-inner">

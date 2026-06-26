@@ -24,7 +24,13 @@ The Models tab's "Your Mac" banner became an interactive **hardware planner** so
 
 ---
 
-## [1.10.0] — 2026-06-26
+## [1.12.0] — 2026-06-26
+
+### Added
+
+- **Uninterrupted Mode (Phase 3) — Continue with fallback.** If a reply streams some text and *then* the provider drops (so the router can't silently swap mid-answer), the partial answer is kept and a **Continue with fallback →** button appears. Clicking it resumes on the next available provider — excluding the one that just broke — and appends to the same message. New `exclude_providers` field on the chat request.
+
+## [1.11.0] — 2026-06-26
 
 ### Added
 
