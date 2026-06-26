@@ -127,6 +127,75 @@ def build_candidates(preferred_repo: Optional[str], *, fallback: bool) -> list[C
     return cands
 
 
+# ───────────── provider list + health (Phase 2) ─────────────
+
+def _provider_display(pid: str) -> tuple[str, str]:
+    if pid == "local":
+        return ("Local (MLX)", "local")
+    p = providers.PROVIDERS.get(pid)
+    return (p.name if p else pid, "cloud")
+
+
+def ordered_provider_list() -> list[dict]:
+    """All routable providers (local + cloud) in current priority order, with
+    enabled/key_set state. Drives the Phase 2 priority+health UI."""
+    known = _default_order()
+    order = [o for o in app_settings.get_provider_priority() if o in known]
+    order += [k for k in known if k not in order]
+    out = []
+    for pid in order:
+        name, kind = _provider_display(pid)
+        key_set = True if kind == "local" else bool(providers.get_api_key(pid))
+        out.append({
+            "id": pid, "name": name, "kind": kind,
+            "enabled": app_settings.get_provider_enabled(pid),
+            "key_set": key_set,
+        })
+    return out
+
+
+async def _health_one(pid: str) -> str:
+    """One of: online · slow · offline · rate_limited · no_key · unknown."""
+    if pid == "local":
+        if not llm_engine.availability().get("available"):
+            return "offline"
+        if llm_engine.manager.loaded_repo() or cache.list_cached_repos():
+            return "online"
+        return "unknown"  # engine fine, but nothing downloaded yet
+    p = providers.PROVIDERS.get(pid)
+    if not p:
+        return "unknown"
+    key = providers.get_api_key(pid)
+    if not key:
+        return "no_key"
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
+    t0 = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(f"{p.base_url}/models", headers=headers)
+    except httpx.TimeoutException:
+        return "offline"
+    except httpx.HTTPError:
+        return "offline"
+    dt = time.time() - t0
+    if r.status_code in (401, 403):
+        return "no_key"
+    if r.status_code == 429:
+        return "rate_limited"
+    if r.status_code >= 500:
+        return "offline"
+    if r.status_code >= 400:
+        return "unknown"
+    return "slow" if dt > 3.0 else "online"
+
+
+async def health_check_all() -> dict:
+    """Concurrent health probe across every routable provider."""
+    ids = [p["id"] for p in ordered_provider_list()]
+    results = await asyncio.gather(*[_health_one(i) for i in ids], return_exceptions=True)
+    return {i: (res if isinstance(res, str) else "unknown") for i, res in zip(ids, results)}
+
+
 # ───────────── error classification ─────────────
 
 def classify(e: Exception) -> str:

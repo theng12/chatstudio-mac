@@ -130,6 +130,14 @@ class ProviderPaidBody(BaseModel):
     enabled: bool = False
 
 
+class ProviderEnabledBody(BaseModel):
+    enabled: bool = True
+
+
+class ProviderOrderBody(BaseModel):
+    order: list[str]
+
+
 class LoadModelBody(BaseModel):
     repo: str
 
@@ -345,6 +353,36 @@ async def provider_live_models(name: str) -> dict:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Live model fetch failed: {e}")
     return {"provider": name, "count": len(models), "models": models}
+
+
+# ───────────── API: router (Uninterrupted Mode priority + health) ─────────────
+
+@app.get("/api/router/providers")
+def router_providers() -> dict:
+    """Routable providers (local + cloud) in priority order, with enabled/key
+    state — drives the fallback-order + health UI."""
+    return {
+        "providers": router.ordered_provider_list(),
+        "uninterrupted_mode": app_settings.get_uninterrupted(),
+        "request_timeout": app_settings.get_request_timeout(),
+    }
+
+
+@app.get("/api/router/health")
+async def router_health() -> dict:
+    return {"health": await router.health_check_all()}
+
+
+@app.post("/api/router/order")
+def router_set_order(body: ProviderOrderBody) -> dict:
+    app_settings.set_provider_priority(body.order)
+    return {"ok": True, "providers": router.ordered_provider_list()}
+
+
+@app.post("/api/router/providers/{pid}/enabled")
+def router_set_enabled(pid: str, body: ProviderEnabledBody) -> dict:
+    app_settings.set_provider_enabled(pid, body.enabled)
+    return {"ok": True, "providers": router.ordered_provider_list()}
 
 
 @app.post("/api/providers/{name}/paid")

@@ -529,4 +529,16 @@ details.how p { margin: 8px 0 0; max-width: 760px; }
 .test-result.ok { color: var(--ok); }
 .test-result.err { color: var(--bad); }
 
+/* fallback order + health (Uninterrupted Mode) */
+.router-row { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid var(--border); }
+.router-row:first-of-type { border-top: none; }
+.router-name { font-weight: 600; }
+.health-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--faint); }
+.health-dot.h-online { background: var(--ok); box-shadow: 0 0 0 3px rgba(63,217,192,.16); }
+.health-dot.h-slow { background: #d8c24a; }
+.health-dot.h-offline { background: var(--bad); }
+.health-dot.h-rate_limited { background: var(--warn); }
+.health-dot.h-no_key,
+.health-dot.h-unknown { background: var(--faint); }
+
 .footer-version { color: var(--faint); font-size: 12px; margin-top: 24px; text-align: center; }

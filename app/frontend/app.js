@@ -44,6 +44,9 @@ function studio() {
     liveLoading: null,
     modelTab: null,        // 'local' | 'cloud' (null = auto-pick)
     showAllProviders: false, // cloud tab: also show providers with no key (greyed)
+    routerProviders: [],   // ordered fallback list {id,name,kind,enabled,key_set}
+    providerHealth: {},    // { id: 'online'|'offline'|'rate_limited'|'no_key'|'slow'|'unknown' }
+    healthLoading: false,
     chatModels: [],
     currentRepo: null,
     selectedRepo: "",
@@ -83,6 +86,10 @@ function studio() {
       this.pickDefaultModel();
       this.pollDownloads();
       setInterval(() => this.refreshHealth(), 15000);
+      // Provider health (Uninterrupted Mode): on launch + every 5 minutes.
+      this.refreshRouterProviders();
+      this.refreshProviderHealth();
+      setInterval(() => this.refreshProviderHealth(), 300000);
       // Auto-load the default model on startup if it's cached
       if (this.gen.defaultModel && this.diag.available) {
         const cached = this.models.find(m => m.repo === this.gen.defaultModel && m.cache?.state === "cached");
@@ -98,7 +105,7 @@ function studio() {
       if (tab === "chat") { this.refreshDiagnostics(); this.refreshChatModels(); }
       if (tab === "models") this.refreshCatalog();
       if (tab === "api") this.refreshConnectivity();
-      if (tab === "settings") { this.refreshSettings(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); }
+      if (tab === "settings") { this.refreshSettings(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
     },
 
     async refreshAll() {
@@ -714,6 +721,43 @@ function studio() {
       } catch (e) {}
       // Refresh the chat dropdown so paid models appear/disappear immediately.
       await this.refreshChatModels();
+    },
+
+    // ── fallback priority + health (Uninterrupted Mode) ──
+    async refreshRouterProviders() {
+      try {
+        const d = await (await fetch(`${this.apiBase}/api/router/providers`)).json();
+        this.routerProviders = d.providers || [];
+      } catch (e) {}
+    },
+    async refreshProviderHealth() {
+      this.healthLoading = true;
+      try {
+        const d = await (await fetch(`${this.apiBase}/api/router/health`)).json();
+        this.providerHealth = d.health || {};
+      } catch (e) {} finally { this.healthLoading = false; }
+    },
+    async moveProvider(id, dir) {
+      const ids = this.routerProviders.map(p => p.id);
+      const i = ids.indexOf(id), j = i + dir;
+      if (i < 0 || j < 0 || j >= ids.length) return;
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      try {
+        const d = await (await fetch(`${this.apiBase}/api/router/order`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ order: ids }),
+        })).json();
+        this.routerProviders = d.providers || this.routerProviders;
+      } catch (e) {}
+    },
+    async toggleProviderEnabled(id, enabled) {
+      try {
+        const d = await (await fetch(`${this.apiBase}/api/router/providers/${id}/enabled`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        })).json();
+        this.routerProviders = d.providers || this.routerProviders;
+      } catch (e) {}
     },
 
     // generation settings persistence

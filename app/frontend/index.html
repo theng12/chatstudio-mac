@@ -499,7 +499,34 @@
           <input type="range" min="10" max="180" step="5" x-model.number="settings.request_timeout" @change="saveUninterrupted()">
           <p class="hint">If a provider sends no token within this time, fall back to the next one.</p>
         </div>
-        <p class="hint">Answers show <em>via &lt;provider&gt;</em> (and “fell back” when a backup was used). Provider priority &amp; per-provider enable/disable are coming next.</p>
+        <p class="hint">Answers show <em>via &lt;provider&gt;</em> (and “fell back” when a backup was used).</p>
+      </section>
+
+      <!-- fallback providers + health -->
+      <section class="card">
+        <div class="card-row" style="margin-bottom:4px;">
+          <h3 style="margin:0;">Fallback order &amp; health</h3>
+          <span class="spacer" style="flex:1"></span>
+          <button class="ghost small" @click="refreshProviderHealth()" :disabled="healthLoading">
+            <span x-show="!healthLoading">↻ Re-check</span>
+            <span x-show="healthLoading" x-cloak>Checking…</span>
+          </button>
+        </div>
+        <p class="card-sub">The order Uninterrupted Mode tries providers (top = first). Turn one off to skip it. Health is checked on launch and every 5 minutes.</p>
+        <template x-for="(p, i) in routerProviders" :key="p.id">
+          <div class="router-row">
+            <span class="health-dot" :class="'h-' + (providerHealth[p.id] || 'unknown')" :title="providerHealth[p.id] || 'unknown'"></span>
+            <span class="router-name" x-text="p.name"></span>
+            <span class="chip" x-text="p.kind"></span>
+            <span class="muted small" x-text="providerHealth[p.id] || '…'"></span>
+            <span class="spacer" style="flex:1"></span>
+            <button class="ghost small" :disabled="i===0" @click="moveProvider(p.id,-1)" title="Higher priority">↑</button>
+            <button class="ghost small" :disabled="i===routerProviders.length-1" @click="moveProvider(p.id,1)" title="Lower priority">↓</button>
+            <label class="showall-toggle">
+              <input type="checkbox" :checked="p.enabled" @change="toggleProviderEnabled(p.id, $event.target.checked)"> on
+            </label>
+          </div>
+        </template>
       </section>
 
       <!-- default model -->

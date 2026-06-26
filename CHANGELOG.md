@@ -24,6 +24,12 @@ The Models tab's "Your Mac" banner became an interactive **hardware planner** so
 
 ---
 
+## [1.10.0] — 2026-06-26
+
+### Added
+
+- **Uninterrupted Mode (Phase 2) — fallback order & health.** Settings now has a **Fallback order & health** panel: reorder providers with ↑/↓ (top = tried first), enable/disable each, and see a live **health badge** per provider — *online · slow · offline · rate-limited · no key*. Health is checked on launch and every 5 minutes. Local MLX + all cloud providers participate. New endpoints: `GET /api/router/providers`, `GET /api/router/health`, `POST /api/router/order`, `POST /api/router/providers/{id}/enabled`.
+
 ## [1.9.0] — 2026-06-26
 
 ### Added
