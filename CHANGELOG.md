@@ -10,19 +10,11 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
-## [1.10.0] — 2026-06-26
+## [1.13.0] — 2026-06-26
 
-### Added — RAM planner: interactive memory slider + live "Best for your RAM" picks (Models tab)
+### Added
 
-The Models tab's "Your Mac" banner became an interactive **hardware planner** so you can size models to a machine you don't own yet.
-
-- **RAM slider + numeric entry + tier presets** (8 / 16 / 24 / 32 / 48 / 64 / 128 / 256 / 512 GB). Defaults to your detected RAM; drag/type to *preview* a different Mac (e.g. plan an M3 Ultra 512 GB before buying it). A `↩ My Mac` button snaps back to detected. The chosen budget persists across reloads.
-- **Live hardware fit** — per-card fit chips and the existing **RAM fit** segmented filter (All / OK / Tight / Over) are now scored **client-side** against the slider via `fitFor()`/`effectiveRam`, so they re-score instantly with no `/api/catalog` round-trip. This also fixes the "Over" filter, which previously compared against a fit state the backend never emitted.
-- **✨ Best for your RAM** — surfaces the highest-quality model in each lane (overall / code / reasoning / starter) that still fits the budget. At 8 GB it favours the small models; at 64 GB+ it upgrades to 70B-class.
-
-**Frontend-only — no new Python dependencies. A plain _Update_ from the Pinokio sidebar is enough.**
-
----
+- **Uninterrupted Mode (Phase 4) — test suite.** `app/backend/router_tests.py`: a self-contained, network-free test matrix for the fallback router (11 scenarios — first-try success, offline→next, rate-limit/timeout retries-then-fallback, all-fail, empty response, break-before-text fallback, break-after-text interruption, disabled-skipped, missing-key-skipped, global attempt cap). Run from `app/`: `../conda_env/bin/python -m backend.router_tests`.
 
 ## [1.12.0] — 2026-06-26
 
@@ -35,6 +27,18 @@ The Models tab's "Your Mac" banner became an interactive **hardware planner** so
 ### Added
 
 - **Uninterrupted Mode (Phase 2) — fallback order & health.** Settings now has a **Fallback order & health** panel: reorder providers with ↑/↓ (top = tried first), enable/disable each, and see a live **health badge** per provider — *online · slow · offline · rate-limited · no key*. Health is checked on launch and every 5 minutes. Local MLX + all cloud providers participate. New endpoints: `GET /api/router/providers`, `GET /api/router/health`, `POST /api/router/order`, `POST /api/router/providers/{id}/enabled`.
+
+## [1.10.0] — 2026-06-26
+
+### Added — RAM planner: interactive memory slider + live "Best for your RAM" picks (Models tab)
+
+The Models tab's "Your Mac" banner became an interactive **hardware planner** so you can size models to a machine you don't own yet.
+
+- **RAM slider + numeric entry + tier presets** (8 / 16 / 24 / 32 / 48 / 64 / 128 / 256 / 512 GB). Defaults to your detected RAM; drag/type to *preview* a different Mac (e.g. plan an M3 Ultra 512 GB before buying it). A `↩ My Mac` button snaps back to detected. The chosen budget persists across reloads.
+- **Live hardware fit** — per-card fit chips and the existing **RAM fit** segmented filter (All / OK / Tight / Over) are now scored **client-side** against the slider via `fitFor()`/`effectiveRam`, so they re-score instantly with no `/api/catalog` round-trip. This also fixes the "Over" filter, which previously compared against a fit state the backend never emitted.
+- **✨ Best for your RAM** — surfaces the highest-quality model in each lane (overall / code / reasoning / starter) that still fits the budget. At 8 GB it favours the small models; at 64 GB+ it upgrades to 70B-class.
+
+**Frontend-only — no new Python dependencies. A plain _Update_ from the Pinokio sidebar is enough.**
 
 ## [1.9.0] — 2026-06-26
 
