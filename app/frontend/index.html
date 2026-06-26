@@ -153,6 +153,8 @@
             <button class="primary small" x-show="selectedRepo && currentRepo!==selectedRepo && !loadingModel && !selectedRepo.startsWith('provider:')" x-cloak @click="loadModel(selectedRepo)">Load</button>
           </div>
           <div class="spacer"></div>
+          <span class="mem-pill" x-show="health.loaded_model" x-cloak :title="'Local model in memory: ' + health.loaded_model">● <span x-text="sessionModelShort(health.loaded_model)"></span> loaded</span>
+          <button class="ghost small" x-show="health.loaded_model" x-cloak @click="unloadModel()" :title="'Free ' + sessionModelShort(health.loaded_model) + ' from unified memory'">⏏ Unload</button>
           <button class="ghost small" @click="newChat()" title="Clear the conversation">✦ New chat</button>
           <button class="ghost small params-toggle" @click="showParams=!showParams">⚙ Params</button>
         </div>
@@ -751,6 +753,9 @@
       <p class="footer-version">Chat Studio KH · v<span x-text="appVersion"></span></p>
     </div>
   </main>
+
+  <!-- transient toast (e.g. model auto-unloaded) -->
+  <div class="toast" x-show="toast" x-cloak x-text="toast" @click="toast=''"></div>
 
 </body>
 </html>

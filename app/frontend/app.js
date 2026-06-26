@@ -66,6 +66,12 @@ function studio() {
     currentSessionId: null,
     showSidebar: true,
 
+    // ── transient toast + idle-unload tracking ──
+    toast: "",
+    _toastT: null,
+    _lastAutoUnloadAt: 0,
+    _seenAutoUnload: false,
+
     // ── generation defaults (persisted in localStorage) ──
     gen: { system: "", temperature: 0.7, maxTokens: 1024, topP: 1.0, defaultModel: "" },
 
@@ -126,8 +132,32 @@ function studio() {
 
     // ════════════ fetchers ════════════
     async refreshHealth() {
-      try { this.health = await (await fetch(`${this.apiBase}/api/health`)).json(); }
-      catch (e) { this.health = { ok: false }; }
+      try {
+        this.health = await (await fetch(`${this.apiBase}/api/health`)).json();
+        // Notice when the server auto-unloaded an idle local model.
+        const au = this.health.auto_unload;
+        if (au && au.at && au.at !== this._lastAutoUnloadAt) {
+          this._lastAutoUnloadAt = au.at;
+          if (this._seenAutoUnload) {  // skip the first poll (pre-existing event)
+            this.showToast(`⏏ Freed ${this.sessionModelShort(au.repo)} — idle 10 min, memory released`);
+          }
+          this._seenAutoUnload = true;
+        } else if (au) {
+          this._seenAutoUnload = true;
+        }
+      } catch (e) { this.health = { ok: false }; }
+    },
+    async unloadModel() {
+      try {
+        const d = await (await fetch(`${this.apiBase}/api/chat/unload`, { method: "POST" })).json();
+        if (d.unloaded && d.repo) this.showToast(`⏏ Unloaded ${this.sessionModelShort(d.repo)} — memory freed`);
+      } catch (e) {}
+      await this.refreshHealth();
+    },
+    showToast(msg) {
+      this.toast = msg;
+      clearTimeout(this._toastT);
+      this._toastT = setTimeout(() => { this.toast = ""; }, 5000);
     },
     async refreshSystem() {
       try { this.system = await (await fetch(`${this.apiBase}/api/system`)).json(); } catch (e) {}

@@ -111,6 +111,45 @@ class LLMManager:
         # Set to request the in-flight generation stop early (Stop button /
         # client disconnect). Checked each token by the generation loop.
         self._cancel = threading.Event()
+        # Memory management: when the loaded local model sits unused (e.g. the
+        # user switched to a cloud model), free it after an idle timeout.
+        self._last_used: float = 0.0
+        self._last_auto_unload: Optional[dict] = None
+
+    def touch(self) -> None:
+        self._last_used = time.time()
+
+    def idle_seconds(self) -> Optional[float]:
+        with self._lock:
+            if self._loaded is None:
+                return None
+        return time.time() - self._last_used
+
+    def last_auto_unload(self) -> Optional[dict]:
+        return self._last_auto_unload
+
+    def unload_if_idle(self, threshold_seconds: float) -> Optional[str]:
+        """Unload the model if it's been idle longer than the threshold. Runs on
+        the MLX worker thread; returns the repo it freed, or None."""
+        return self._exec.submit(self._unload_if_idle_sync, threshold_seconds).result()
+
+    def _unload_if_idle_sync(self, threshold: float) -> Optional[str]:
+        with self._lock:
+            if self._loaded is None:
+                return None
+            if (time.time() - self._last_used) < threshold:
+                return None
+            repo = self._loaded.repo
+            self._loaded = None
+            self._last_auto_unload = {"repo": repo, "at": time.time(), "reason": "idle"}
+            try:
+                import gc
+                import mlx.core as mx
+                gc.collect()
+                mx.clear_cache()
+            except Exception:
+                pass
+            return repo
 
     def loaded_repo(self) -> Optional[str]:
         with self._lock:
@@ -189,6 +228,7 @@ class LLMManager:
 
             self._loaded = LoadedModel(repo=repo, model=model, tokenizer=tokenizer)
             self._load_error = None
+            self._last_used = time.time()
             return {"repo": repo, "already_loaded": False}
 
     def unload(self) -> bool:
@@ -285,6 +325,7 @@ class LLMManager:
         thread/stream-bound. Prompt building (tokenizer only, no GPU work) runs
         on the caller's thread; generated text is bridged back over a queue, so
         this stays a simple synchronous iterator for callers."""
+        self.touch()  # mark in-use so the idle auto-unload timer resets
         loaded, prompt = self.build_prompt(repo, messages)
 
         chunks: "queue.Queue" = queue.Queue()

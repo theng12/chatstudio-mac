@@ -195,6 +195,10 @@ def health() -> dict:
         "app_version": APP_VERSION,
         "hf_home": str(cache.hf_home()),
         "hub_dir": str(cache.hub_dir()),
+        # Local-model memory status (drives the Unload button + idle notice).
+        "loaded_model": llm_engine.manager.loaded_repo(),
+        "idle_seconds": llm_engine.manager.idle_seconds(),
+        "auto_unload": llm_engine.manager.last_auto_unload(),
     }
 
 
@@ -599,6 +603,36 @@ def chat_cancel() -> dict:
     """Stop the in-flight generation (Stop button). Frees the worker so the
     next message can start immediately instead of waiting out max_tokens."""
     return {"ok": llm_engine.manager.cancel()}
+
+
+@app.post("/api/chat/unload")
+def chat_unload() -> dict:
+    """Free the loaded local model from unified memory (Unload button)."""
+    repo = llm_engine.manager.loaded_repo()
+    unloaded = llm_engine.manager.unload()
+    return {"unloaded": unloaded, "repo": repo}
+
+
+# Auto-unload an idle local model (e.g. after switching to a cloud model) so it
+# stops holding unified memory. Default: free it after 10 minutes unused.
+_IDLE_UNLOAD_SECONDS = 600
+
+
+@app.on_event("startup")
+async def _start_idle_unloader():
+    async def loop():
+        while True:
+            await asyncio.sleep(60)
+            try:
+                freed = await asyncio.to_thread(
+                    llm_engine.manager.unload_if_idle, _IDLE_UNLOAD_SECONDS
+                )
+                if freed:
+                    print(f"[chat studio] auto-unloaded idle model: {freed}",
+                          file=sys.stderr, flush=True)
+            except Exception:
+                pass
+    asyncio.create_task(loop())
 
 
 @app.post("/api/chat/completions")

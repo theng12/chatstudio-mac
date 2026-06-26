@@ -10,6 +10,13 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.15.0] — 2026-06-26
+
+### Added
+
+- **Unload model** button in the Chat header — one click frees the loaded local MLX model from unified memory. A small **● &lt;model&gt; loaded** pill shows when a local model is resident.
+- **Auto-unload on idle.** A loaded local model is freed automatically after **10 minutes unused** (e.g. once you've switched to a cloud model), with a **toast notice** when it happens. It transparently reloads on your next local message. New `POST /api/chat/unload`; `/api/health` now reports `loaded_model` / `idle_seconds` / `auto_unload`.
+
 ## [1.14.0] — 2026-06-26
 
 ### Added
