@@ -10,6 +10,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.13.1] — 2026-06-26
+
+### Fixed
+
+- **A fully-downloaded model could stay hidden** (reported "partial" and missing from the dropdown) when Hugging Face left behind a leftover `.incomplete` file — a duplicate of an already-completed blob from an interrupted retry. `cache_state` now ignores an `.incomplete` whose target blob is already complete, so the model shows and loads normally. (Hit with `gemma-3-4b-it-qat-4bit`; its upstream `index.json` is also mislabeled to phantom shards, but mlx-lm loads `model.safetensors` directly so that doesn't affect loading.)
+
 ## [1.13.0] — 2026-06-26
 
 ### Added

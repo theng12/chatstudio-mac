@@ -36,15 +36,27 @@ def repo_cache_dir(repo: str) -> Path:
 
 
 def has_incomplete(repo: str) -> bool:
+    """True if there's a genuinely-unfinished download.
+
+    Ignores a leftover `.incomplete` whose target blob has already completed.
+    HF names a partial `<sha>.<rand>.incomplete` next to the finished `<sha>`
+    blob; an interrupted retry can leave such a duplicate behind even though the
+    file fully downloaded under its real name — which would otherwise keep a
+    complete model stuck reporting "partial" forever."""
     blobs = repo_cache_dir(repo) / "blobs"
     if not blobs.exists():
         return False
     try:
-        for entry in blobs.iterdir():
-            if entry.name.endswith(".incomplete"):
-                return True
+        names = {e.name for e in blobs.iterdir()}
     except FileNotFoundError:
         return False
+    for name in names:
+        if not name.endswith(".incomplete"):
+            continue
+        base = name.split(".", 1)[0]  # the target blob's sha
+        if base and base in names:
+            continue  # target already complete → leftover junk, not a real gap
+        return True
     return False
 
 
