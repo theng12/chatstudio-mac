@@ -44,8 +44,15 @@ def _test(fn):
 # ───────────── harness ─────────────
 
 def _setup(*, keys=(), priority=None, disabled=()):
-    """Fresh, isolated settings + patched provider availability."""
-    settings._PATH = Path("/tmp/cs_router_tests_settings.json")
+    """Fresh, isolated settings + patched provider availability. Deletes the temp
+    settings file first so every scenario starts from defaults — no state can
+    leak between tests (or across runs)."""
+    path = Path("/tmp/cs_router_tests_settings.json")
+    try:
+        path.unlink()
+    except OSError:
+        pass
+    settings._PATH = path
     settings._loaded = False
     settings._cache = {}
     if priority:
