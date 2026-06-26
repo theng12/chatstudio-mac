@@ -4,6 +4,7 @@ logs/
 app/__pycache__/
 app/backend/__pycache__/
 app/backend/settings.json
+app/backend/sessions.json
 *.pyc
 .DS_Store
 app/.pinokio-temp/

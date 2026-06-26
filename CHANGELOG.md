@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.14.0] — 2026-06-26
+
+### Added
+
+- **Chat history.** Conversations now persist **server-side** (gitignored `sessions.json`, so history survives browser-cache clears and is visible from any device pointed at the server). A collapsible **history sidebar** in the Chat tab lets you:
+  - **Search** across chat titles *and* message content,
+  - **Pin** important sessions (pinned float to the top), **rename**, and **delete**,
+  - **Open** a past session to **restore its full conversation** — continuing it re-sends that context to the model.
+  - Sessions **auto-save** after each exchange; titles auto-derive from your first message. Toggle the sidebar with ☰.
+
 ## [1.13.1] — 2026-06-26
 
 ### Fixed

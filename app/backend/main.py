@@ -36,7 +36,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router
+from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions
 from .downloads import manager
 
 
@@ -128,6 +128,22 @@ class ProviderKeyBody(BaseModel):
 
 class ProviderPaidBody(BaseModel):
     enabled: bool = False
+
+
+class SessionBody(BaseModel):
+    id: Optional[str] = None
+    title: Optional[str] = None
+    model: Optional[str] = None
+    pinned: Optional[bool] = None
+    messages: Optional[list] = None
+
+
+class PinBody(BaseModel):
+    pinned: bool = True
+
+
+class RenameBody(BaseModel):
+    title: str = ""
 
 
 class ProviderEnabledBody(BaseModel):
@@ -394,6 +410,46 @@ def set_provider_paid(name: str, body: ProviderPaidBody) -> dict:
         raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
     app_settings.set_provider_paid(name, body.enabled)
     return {"ok": True, "providers": providers.public_view()}
+
+
+# ───────────── API: chat sessions (history) ─────────────
+
+@app.get("/api/sessions")
+def list_sessions(q: str = "") -> dict:
+    """Session metadata (pinned first, then recent). `q` searches title + content."""
+    return {"sessions": sessions.list_meta(q)}
+
+
+@app.get("/api/sessions/{sid}")
+def get_session(sid: str) -> dict:
+    s = sessions.get(sid)
+    if not s:
+        raise HTTPException(status_code=404, detail="session not found")
+    return s
+
+
+@app.post("/api/sessions")
+def save_session(body: SessionBody) -> dict:
+    return sessions.upsert(body.model_dump(exclude_none=True))
+
+
+@app.delete("/api/sessions/{sid}")
+def delete_session(sid: str) -> dict:
+    return {"deleted": sessions.delete(sid)}
+
+
+@app.post("/api/sessions/{sid}/pin")
+def pin_session(sid: str, body: PinBody) -> dict:
+    if not sessions.set_pinned(sid, body.pinned):
+        raise HTTPException(status_code=404, detail="session not found")
+    return {"ok": True}
+
+
+@app.post("/api/sessions/{sid}/rename")
+def rename_session(sid: str, body: RenameBody) -> dict:
+    if not sessions.rename(sid, body.title):
+        raise HTTPException(status_code=404, detail="session not found")
+    return {"ok": True}
 
 
 @app.post("/api/providers/{name}/test")

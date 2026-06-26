@@ -60,6 +60,12 @@ function studio() {
     showParams: false,
     _abort: null,
 
+    // ── chat sessions (history) ──
+    sessions: [],
+    sessionSearch: "",
+    currentSessionId: null,
+    showSidebar: true,
+
     // ── generation defaults (persisted in localStorage) ──
     gen: { system: "", temperature: 0.7, maxTokens: 1024, topP: 1.0, defaultModel: "" },
 
@@ -87,6 +93,7 @@ function studio() {
       await this.refreshConnectivity();
       this.pickDefaultModel();
       this.pollDownloads();
+      this.refreshSessions();
       setInterval(() => this.refreshHealth(), 15000);
       // Provider health (Uninterrupted Mode): on launch + every 5 minutes.
       this.refreshRouterProviders();
@@ -430,7 +437,81 @@ function studio() {
       this.selectedRepo = repo;
       if (repo !== this.currentRepo) this.loadModel(repo);
     },
-    newChat() { this.stopGen(); this.messages = []; this.streamingText = ""; this.continueState = null; },
+    newChat() { this.stopGen(); this.messages = []; this.streamingText = ""; this.continueState = null; this.currentSessionId = null; },
+
+    // ════════════ chat sessions (history) ════════════
+    async refreshSessions() {
+      try {
+        const q = encodeURIComponent(this.sessionSearch || "");
+        const d = await (await fetch(`${this.apiBase}/api/sessions?q=${q}`)).json();
+        this.sessions = d.sessions || [];
+      } catch (e) {}
+    },
+    pinnedSessions() { return this.sessions.filter(s => s.pinned); },
+    recentSessions() { return this.sessions.filter(s => !s.pinned); },
+    async openSession(id) {
+      try {
+        const s = await (await fetch(`${this.apiBase}/api/sessions/${id}`)).json();
+        this.messages = (s.messages || []).map(m => ({ role: m.role, content: m.content, meta: m.meta }));
+        this.currentSessionId = s.id;
+        if (s.model) {
+          this.selectedRepo = s.model;                       // restore the model used
+          if (s.model.startsWith("provider:")) this.currentRepo = s.model;  // cloud needs no load
+        }
+        this.scrollThread();
+      } catch (e) {}
+    },
+    async saveCurrentSession() {
+      if (!this.messages.length) return;
+      try {
+        const m = await (await fetch(`${this.apiBase}/api/sessions`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: this.currentSessionId,
+            model: this.currentRepo,
+            messages: this.messages.map(x => ({ role: x.role, content: x.content, meta: x.meta })),
+          }),
+        })).json();
+        if (m && m.id) this.currentSessionId = m.id;
+        await this.refreshSessions();
+      } catch (e) {}
+    },
+    async togglePin(s) {
+      await fetch(`${this.apiBase}/api/sessions/${s.id}/pin`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pinned: !s.pinned }),
+      }).catch(() => {});
+      await this.refreshSessions();
+    },
+    async renameSession(s) {
+      const t = prompt("Rename chat:", s.title || "");
+      if (t === null) return;
+      await fetch(`${this.apiBase}/api/sessions/${s.id}/rename`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: t }),
+      }).catch(() => {});
+      await this.refreshSessions();
+    },
+    async deleteSession(s) {
+      if (!confirm(`Delete "${s.title || 'this chat'}"?`)) return;
+      await fetch(`${this.apiBase}/api/sessions/${s.id}`, { method: "DELETE" }).catch(() => {});
+      if (s.id === this.currentSessionId) { this.currentSessionId = null; this.messages = []; }
+      await this.refreshSessions();
+    },
+    sessionModelShort(repo) {
+      if (!repo) return "";
+      if (repo.startsWith("provider:")) return repo.split(":")[1];
+      return repo.split("/").pop();
+    },
+    relTime(ts) {
+      if (!ts) return "";
+      const d = Date.now() - ts * 1000, m = 60000, h = 3600000, day = 86400000;
+      if (d < m) return "just now";
+      if (d < h) return Math.floor(d / m) + "m ago";
+      if (d < day) return Math.floor(d / h) + "h ago";
+      if (d < 7 * day) return Math.floor(d / day) + "d ago";
+      return new Date(ts * 1000).toLocaleDateString();
+    },
 
     // ════════════ chat send / stream ════════════
     onEnter(e) {
@@ -513,6 +594,7 @@ function studio() {
         this.streamingText = "";
         this._abort = null;
         this.scrollThread();
+        this.saveCurrentSession();   // persist this exchange to history
         this.$nextTick(() => { const el = this.$refs.composer; if (el) el.focus(); });
       }
     },

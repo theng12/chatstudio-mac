@@ -77,8 +77,54 @@
 
     <!-- chat surface -->
     <template x-if="diag.available && chatModels.length > 0">
-      <div class="chatpage" style="flex:1; min-height:0;">
+      <div class="chat-shell">
+
+        <!-- chat history sidebar -->
+        <aside class="chat-sidebar" x-show="showSidebar" x-cloak>
+          <button class="primary small cs-new" @click="newChat()">✦ New chat</button>
+          <input class="cs-search" x-model="sessionSearch" @input="refreshSessions()" placeholder="🔍 Search chats…">
+          <div class="cs-list">
+            <template x-if="pinnedSessions().length">
+              <div>
+                <div class="cs-label">Pinned</div>
+                <template x-for="s in pinnedSessions()" :key="s.id">
+                  <div class="cs-item" :class="{active: s.id===currentSessionId}" @click="openSession(s.id)">
+                    <div class="cs-item-main">
+                      <div class="cs-title" x-text="s.title"></div>
+                      <div class="cs-sub"><span x-text="sessionModelShort(s.model)"></span> · <span x-text="relTime(s.updated)"></span></div>
+                    </div>
+                    <div class="cs-actions">
+                      <button class="cs-ic" @click.stop="togglePin(s)" title="Unpin">📌</button>
+                      <button class="cs-ic" @click.stop="renameSession(s)" title="Rename">✎</button>
+                      <button class="cs-ic" @click.stop="deleteSession(s)" title="Delete">🗑</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+            <div class="cs-label" x-show="recentSessions().length">Recent</div>
+            <template x-for="s in recentSessions()" :key="s.id">
+              <div class="cs-item" :class="{active: s.id===currentSessionId}" @click="openSession(s.id)">
+                <div class="cs-item-main">
+                  <div class="cs-title" x-text="s.title"></div>
+                  <div class="cs-sub"><span x-text="sessionModelShort(s.model)"></span> · <span x-text="relTime(s.updated)"></span></div>
+                </div>
+                <div class="cs-actions">
+                  <button class="cs-ic cs-pin-off" @click.stop="togglePin(s)" title="Pin">📌</button>
+                  <button class="cs-ic" @click.stop="renameSession(s)" title="Rename">✎</button>
+                  <button class="cs-ic" @click.stop="deleteSession(s)" title="Delete">🗑</button>
+                </div>
+              </div>
+            </template>
+            <p class="muted small" x-show="sessions.length===0" style="padding:12px 8px;"
+               x-text="sessionSearch ? 'No matching chats.' : 'No saved chats yet.'"></p>
+          </div>
+        </aside>
+
+        <!-- chat main column -->
+        <div class="chat-main">
         <div class="chat-head">
+          <button class="ghost small sidebar-toggle" @click="showSidebar=!showSidebar" title="Toggle history">☰</button>
           <div class="model-select">
             <div class="seg modeltabs">
               <button type="button" :class="{active: effectiveModelTab()==='local'}" @click="setModelTab('local')">🖥 Local</button>
@@ -182,7 +228,8 @@
             <span x-show="currentRepo" x-cloak>temp <span x-text="gen.temperature.toFixed(2)"></span> · max <span x-text="gen.maxTokens"></span> tok</span>
           </div>
         </div>
-      </div>
+        </div><!-- /chat-main -->
+      </div><!-- /chat-shell -->
     </template>
   </main>
 
