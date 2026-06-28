@@ -43,6 +43,12 @@ class Provider:
     env_var: str          # env var name (CHATSTUDIO_<KEY>_API_KEY) for override
     docs_url: str = ""
     reuse_hf_token: bool = False   # fall back to the saved Hugging Face token (HF Router)
+    # When True, /v1/models fetches the provider's live /models endpoint
+    # (TTL-cached) instead of using the curated `models` tuple. Reserved for
+    # providers whose catalog drifts often or is too large to curate by hand
+    # (OpenRouter ships hundreds). Static providers get the curated list,
+    # which is faster and avoids hammering their API on every listing call.
+    supports_live_listing: bool = False
 
 
 OPENROUTER = Provider(
@@ -51,6 +57,7 @@ OPENROUTER = Provider(
     base_url="https://openrouter.ai/api/v1",
     env_var="CHATSTUDIO_OPENROUTER_API_KEY",
     docs_url="https://openrouter.ai/keys",
+    supports_live_listing=True,
     models=(
         CloudModel(
             "meta-llama/llama-3.3-70b-instruct:free",
@@ -384,6 +391,49 @@ _NON_CHAT_HINTS = (
     "-image", "image-", "rerank", "moderation", "guard", "bge-", "-bge",
     "clip", "transcribe", "audio", "vision-encoder",
 )
+
+
+# ─── Live-listing TTL cache (used by /v1/models for dynamic providers) ───
+# Maps provider.key → (fetched_at_epoch, [{"id":..., "repo":...}, ...]).
+# 60s is short enough that newly-added cloud models surface quickly while
+# still preventing /v1/models from hammering upstream on every call.
+_LIVE_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_LIVE_CACHE_TTL_S = 60.0
+
+
+def _static_models(provider: Provider) -> list[dict]:
+    """The curated catalog rendered in the {id, repo} shape /v1/models expects."""
+    return [
+        {"id": m.id, "repo": repo_id(provider.key, m.id)}
+        for m in provider.models
+    ]
+
+
+async def models_for_provider(provider: Provider) -> list[dict]:
+    """Return [{id, repo}, ...] for a provider, picking the strategy that
+    fits: live-fetch with TTL cache for providers flagged
+    `supports_live_listing` (currently just OpenRouter), curated static
+    list for the rest. Failures always degrade to the static list — this
+    function never raises, so /v1/models can safely fan out across all
+    providers without a single bad provider taking the response down."""
+    if not provider.supports_live_listing:
+        return _static_models(provider)
+
+    now = time.time()
+    cached = _LIVE_CACHE.get(provider.key)
+    if cached and (now - cached[0]) < _LIVE_CACHE_TTL_S:
+        return cached[1]
+    try:
+        models = await list_live_models(provider)
+        _LIVE_CACHE[provider.key] = (now, models)
+        return models
+    except Exception:
+        # Network error, auth error, upstream 5xx — fall back to static.
+        # Cache the fallback briefly so a flapping upstream doesn't make us
+        # retry on every request and time out /v1/models.
+        fallback = _static_models(provider)
+        _LIVE_CACHE[provider.key] = (now, fallback)
+        return fallback
 
 
 async def list_live_models(provider: Provider) -> list[dict]:

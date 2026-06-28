@@ -753,18 +753,48 @@ async def chat_completions(body: ChatCompletionsBody):
 # ───────────── API: OpenAI-compatible alias ─────────────
 
 @app.get("/v1/models")
-def openai_models() -> dict:
-    # Every cached model is usable — catalog entries plus anything the user
-    # downloaded via Hub search.
-    repos: list[str] = []
-    seen = set()
+async def openai_models() -> dict:
+    # Local MLX models first — every cached model is usable (catalog entries
+    # plus anything the user downloaded via Hub search).
+    seen: set[str] = set()
+    data: list[dict] = []
     for m in catalog.CATALOG:
         if cache.cache_state(m.repo) == "cached" and m.repo not in seen:
-            repos.append(m.repo); seen.add(m.repo)
+            data.append({"id": m.repo, "object": "model", "owned_by": m.repo.split("/")[0]})
+            seen.add(m.repo)
     for repo in cache.list_cached_repos():
         if repo not in seen:
-            repos.append(repo); seen.add(repo)
-    data = [{"id": r, "object": "model", "owned_by": r.split("/")[0]} for r in repos]
+            data.append({"id": repo, "object": "model", "owned_by": repo.split("/")[0]})
+            seen.add(repo)
+
+    # Cloud providers: include any provider whose API key is configured
+    # (env var or settings.json — `get_api_key` handles the precedence,
+    # including HF Router's fallback to the saved HF token). Providers
+    # without a key are silently excluded — no key, no models.
+    keyed_providers = [
+        p for p in providers.PROVIDERS.values() if providers.get_api_key(p.key)
+    ]
+    if keyed_providers:
+        # Fan out concurrently so the slowest provider doesn't dominate
+        # wall-clock. `return_exceptions=True` ensures one provider's
+        # failure (network, auth, upstream 5xx) never breaks /v1/models —
+        # we just skip that provider for this call. `models_for_provider`
+        # already swallows its own exceptions and falls back to the static
+        # catalog, so the outer return_exceptions is belt-and-braces.
+        results = await asyncio.gather(
+            *(providers.models_for_provider(p) for p in keyed_providers),
+            return_exceptions=True,
+        )
+        for provider, result in zip(keyed_providers, results):
+            if isinstance(result, BaseException):
+                continue
+            for m in result:
+                repo = m["repo"]
+                if repo in seen:
+                    continue
+                data.append({"id": repo, "object": "model", "owned_by": provider.key})
+                seen.add(repo)
+
     return {"object": "list", "data": data}
 
 
@@ -773,6 +803,95 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
     messages = [m.model_dump() for m in body.messages]
     created = int(time.time())
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+
+    # ── Cloud provider routing: synthetic id "provider:<key>:<model_id>" ──
+    # Mirrors /api/chat/completions' cloud fork so /v1/chat/completions is a
+    # drop-in for clients picking cloud models from /v1/models. Without this
+    # fork, ensure_loaded() below would raise a 409 for any cloud model id.
+    if body.model.startswith("provider:"):
+        parsed = providers.parse_repo(body.model)
+        if not parsed:
+            raise HTTPException(status_code=400, detail=f"Unknown provider model: {body.model}")
+        provider, model = parsed
+        # No key → can't reach upstream. Surface a clean 401 instead of letting
+        # providers.stream_chat raise a generic RuntimeError mid-stream.
+        if not providers.get_api_key(provider.key):
+            raise HTTPException(
+                status_code=401,
+                detail=f"{provider.name} API key not set. Add it in Settings → Cloud providers.",
+            )
+        # Paid models are gated behind the per-provider opt-in so a paid model
+        # can't be used (and billed) without the user explicitly enabling it.
+        if not providers.model_allowed(provider, model):
+            raise HTTPException(
+                status_code=403,
+                detail=(f"{model.id} is a paid {provider.name} model. "
+                        f"Enable paid models for {provider.name} in Settings → Cloud providers first."),
+            )
+        if body.stream:
+            async def cloud_event_stream():
+                try:
+                    async for chunk in providers.stream_chat(
+                        provider, model, messages,
+                        body.temperature, body.max_tokens, body.top_p,
+                    ):
+                        event = {
+                            "id": completion_id,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": body.model,
+                            "choices": [{
+                                "index": 0,
+                                "delta": {"content": chunk},
+                                "finish_reason": None,
+                            }],
+                        }
+                        yield f"data: {json.dumps(event)}\n\n"
+                except Exception as e:
+                    # Match the local-path error envelope so OpenAI clients
+                    # parse cloud and local failures the same way.
+                    event = {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": body.model,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "error",
+                        }],
+                        "error": str(e),
+                    }
+                    yield f"data: {json.dumps(event)}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(cloud_event_stream(), media_type="text/event-stream")
+        # Non-streaming: collect chunks and return a single chat.completion.
+        try:
+            chunks: list[str] = []
+            async for c in providers.stream_chat(
+                provider, model, messages,
+                body.temperature, body.max_tokens, body.top_p,
+            ):
+                chunks.append(c)
+            text = "".join(chunks)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        return {
+            "id": completion_id,
+            "object": "chat.completion",
+            "created": created,
+            "model": body.model,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": None,
+                "completion_tokens": None,
+                "total_tokens": None,
+            },
+        }
 
     # Drop-in OpenAI behavior: load the requested model on demand if needed, so
     # clients (e.g. Story Studio) just specify `model` without a separate load.
