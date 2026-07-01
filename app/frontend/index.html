@@ -383,7 +383,7 @@
                 <div class="model-actions">
                   <template x-if="m.cache.state === 'cached'">
                     <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
-                      <span class="ok-text">✓ downloaded</span>
+                      <span class="ok-text">✓ cached</span>
                       <button class="primary small" @click="loadFromModels(m.repo)">💬 Chat with this</button>
                       <button class="ghost small" :class="{active: gen.defaultModel===m.repo}"
                               @click="setDefaultModel(gen.defaultModel===m.repo ? '' : m.repo)">

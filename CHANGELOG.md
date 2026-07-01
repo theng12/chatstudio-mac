@@ -10,6 +10,27 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.15.1] — 2026-07-01
+
+### Fixed — Numeric-formatting and terminology audit (same bug class as Voice Studio KH v1.7.2/v1.7.3)
+
+First run of the sibling-app consistency-audit skill against Chat Studio. Checked every byte/size display and every state-label for the two bug classes found earlier in Voice Studio: GB-vs-GiB unit mismatches and terminology drift for the same underlying state.
+
+**`formatBytes()` used binary (÷1024) math while labeling units decimally (`KB`/`MB`/`GB`/`TB`)** — the exact bug class Voice Studio fixed in v1.7.2/v1.7.3, independently reintroduced here. `formatBytes()` is the single shared renderer for live download progress (bytes observed/total, transfer speed) across both the Models-tab per-card download caption and the Downloads-tab job table — one fix covers every model. Root cause: the catalog's static `size_gb` (`catalog.py`, "~0.5-0.7 GB per billion params," decimal) and the live download total (real bytes from Hugging Face, run through `formatBytes`) were computed on different bases, so a model listed as "4.3 GB" would only ever show "~4.0 GB" downloaded — looking like the download fell short or stalled, when actually all the bytes arrived. `formatBytes()` now divides by 1000, matching the catalog's own decimal convention and Hugging Face's own byte reporting. Kept the function's existing rounding style (0 decimals for bytes, 1 decimal otherwise) — only the divisor was wrong.
+
+**Terminology drift: "✓ cached" vs "✓ downloaded" for the identical state, same card.** The Models-tab card's title chip reads `✓ cached` when `m.cache.state === 'cached'`; a few lines down, the same card's action area read `✓ downloaded` for that exact same condition — both visible at once. "Cached" is this app's dominant term for the state (also used identically in the RAM-planner's model-picker chip) — standardized the action-area label to `✓ cached` to match.
+
+**Checked and confirmed correct, deliberately left unchanged:**
+- Every hardcoded state color (`.dot.ok/.bad`, `.chip.ok/.warn`, `.chip.fit-ok/-tight/-over`, `.test-result.ok/.err`, `button.link.danger`) resolves to the exact same RGB as `var(--ok)`/`var(--warn)`/`var(--bad)` — no duplicate/disagreeing palette, unlike Voice Studio's three-different-greens bug. `.banner.warn` and `.continue-banner` share one hardcoded darker amber pairing (`#221c10`/`#5a4a1f`) used consistently in both places for a deliberately more opaque "banner" treatment distinct from the translucent chip tint — the two instances agree with each other, so not a real bug.
+- `size_gb_approximate: true` is set unconditionally for every catalog entry in `serialize_model()` (not per-entry) — the "approx. download" label already renders consistently for all 34+ models, so the catalog's disclosed estimate-vs-actual gap (a few percent, expected) is correctly and uniformly flagged to the user. No fix needed.
+- Download interaction parity: Chat Studio has exactly one download entry point (Models-tab card → `startDownload()`, no confirmation dialog) and no second UI path to diverge from it — `/api/hub/search` exists server-side but has no frontend consumer, so there's no Hub-search download flow to compare against. `deleteSession()` (chat-history sidebar) is called identically from both its pinned and unpinned row markup. No custom modals exist anywhere in the app — `deleteSession`/`renameSession` use native browser `confirm()`/`prompt()`, which can't diverge in button order or styling. Nothing to fix.
+
+### Notes
+
+- PATCH bump (1.15.0 → 1.15.1) — frontend-only (`app.js`, `index.html`), no backend/schema change. Already live on the running server (static assets served fresh per request, cache-busted by the `?v=` query string) — confirmed via direct `curl` against `/assets/app.js` and `/` on the user's own running instance (port 47871) rather than restarting it. `node --check app.js` passed.
+
+---
+
 ## [1.15.0] — 2026-06-26
 
 ### Added

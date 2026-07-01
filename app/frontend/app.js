@@ -1002,11 +1002,20 @@ console.log(data.choices[0].message.content);`;
 
     // ════════════ formatting helpers ════════════
     formatBytes(b) {
+      // Decimal (SI, ÷1000) — NOT binary ÷1024. Must match the catalog's
+      // static `size_gb` values (estimated via the "~0.5-0.7 GB per billion
+      // params" decimal rule in catalog.py) and Hugging Face's own byte
+      // counts, or live download progress visibly disagrees with the "X GB"
+      // size shown before downloading — e.g. a real 4.3 GB (decimal) model
+      // would cap out at "~4.0 GB" downloaded if divided by 1024^3 instead
+      // (same bytes, ~7% smaller-looking number, no bug in either reading
+      // alone — just a units mismatch). Same bug class Voice Studio KH
+      // fixed in v1.7.2/v1.7.3.
       if (!b || b <= 0) return "—";
       const units = ["B", "KB", "MB", "GB", "TB"];
       let i = 0;
       let v = b;
-      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
       return v.toFixed(i === 0 ? 0 : 1) + " " + units[i];
     },
     formatDuration(s) {
