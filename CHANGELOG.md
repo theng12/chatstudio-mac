@@ -10,6 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.15.2] — 2026-07-01
+
+### Changed — cloud model surfacing (NVIDIA + OpenRouter)
+
+- **NVIDIA curated list expanded 7 → 32** verified chat/coding/reasoning models (Llama 3.x/4, Nemotron incl. Ultra 253B & 340B, DeepSeek V4, Qwen3, Mistral Large 3, Gemma 4, Phi, GPT-OSS, Granite, Yi, Jamba, DBRX, Codestral, StarCoder2, Kimi). NVIDIA is served as a **static** list (not live-listed), so this is what API consumers like **Story Studio** see — now 32 instead of 7. Also **dropped 2 stale ids** (`google/gemma-3-27b-it`, `qwen/qwen2.5-coder-32b-instruct`) that NVIDIA no longer hosts. The full 100+ catalog is still one click away via **Load all models** in the UI.
+- **OpenRouter live listing is now free-only.** Its live catalog is 300+ (mostly paid), which flooded the picker and `/v1/models`; now filtered to the ~21 `:free` models via a new `live_free_only` provider flag. Paid OpenRouter flagships remain available through the curated list behind the paid toggle.
+- **Tightened the non-chat filter** (added embeddings/reward/safety/retrieval/translate/parse/vision markers) so live lists stay chat-relevant.
+
 ## [1.15.1] — 2026-07-01
 
 ### Fixed — Numeric-formatting and terminology audit (same bug class as Voice Studio KH v1.7.2/v1.7.3)

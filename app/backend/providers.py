@@ -43,6 +43,7 @@ class Provider:
     env_var: str          # env var name (CHATSTUDIO_<KEY>_API_KEY) for override
     docs_url: str = ""
     reuse_hf_token: bool = False   # fall back to the saved Hugging Face token (HF Router)
+    live_free_only: bool = False   # when live-fetching, keep only free models (OpenRouter)
     # When True, /v1/models fetches the provider's live /models endpoint
     # (TTL-cached) instead of using the curated `models` tuple. Reserved for
     # providers whose catalog drifts often or is too large to curate by hand
@@ -58,6 +59,7 @@ OPENROUTER = Provider(
     env_var="CHATSTUDIO_OPENROUTER_API_KEY",
     docs_url="https://openrouter.ai/keys",
     supports_live_listing=True,
+    live_free_only=True,   # its live catalog is 300+; surface only the :free tier
     models=(
         CloudModel(
             "meta-llama/llama-3.3-70b-instruct:free",
@@ -112,42 +114,53 @@ NVIDIA = Provider(
     base_url="https://integrate.api.nvidia.com/v1",
     env_var="CHATSTUDIO_NVIDIA_API_KEY",
     docs_url="https://build.nvidia.com/explore/discover",
+    # NVIDIA NIM hosts 100+ models free for developers. This is a curated slice
+    # of the most useful chat/coding/reasoning ones (all verified present in the
+    # live catalog); the "Load all models" button fetches the full list. Kept
+    # server-side so API consumers (e.g. Story Studio) see them without a
+    # browser-side live fetch.
     models=(
-        CloudModel(
-            "meta/llama-3.1-70b-instruct",
-            "Llama 3.1 70B Instruct",
-            "NVIDIA-hosted · strong generalist",
-        ),
-        CloudModel(
-            "meta/llama-3.1-8b-instruct",
-            "Llama 3.1 8B Instruct",
-            "Fast small model",
-        ),
-        CloudModel(
-            "nvidia/llama-3.1-nemotron-70b-instruct",
-            "Nemotron 70B Instruct",
-            "NVIDIA's reasoning-tuned 70B",
-        ),
-        CloudModel(
-            "nvidia/llama-3.3-nemotron-super-49b-v1",
-            "Nemotron Super 49B v1",
-            "Strong reasoning · larger context",
-        ),
-        CloudModel(
-            "mistralai/mistral-large-2-instruct",
-            "Mistral Large 2",
-            "Mistral's flagship 123B",
-        ),
-        CloudModel(
-            "google/gemma-3-27b-it",
-            "Gemma 3 27B IT",
-            "Google's 27B instruction-tuned",
-        ),
-        CloudModel(
-            "qwen/qwen2.5-coder-32b-instruct",
-            "Qwen 2.5 Coder 32B",
-            "Code-focused Qwen model",
-        ),
+        # ── Llama family ──
+        CloudModel("meta/llama-3.3-70b-instruct", "Llama 3.3 70B", "Strong generalist"),
+        CloudModel("meta/llama-3.1-70b-instruct", "Llama 3.1 70B", "Generalist"),
+        CloudModel("meta/llama-3.1-8b-instruct", "Llama 3.1 8B", "Fast small model"),
+        CloudModel("meta/llama-3.2-3b-instruct", "Llama 3.2 3B", "Tiny + fast"),
+        CloudModel("meta/llama-4-maverick-17b-128e-instruct", "Llama 4 Maverick", "MoE · long context"),
+        # ── NVIDIA Nemotron (reasoning-tuned) ──
+        CloudModel("nvidia/llama-3.3-nemotron-super-49b-v1.5", "Nemotron Super 49B v1.5", "Reasoning-tuned"),
+        CloudModel("nvidia/llama-3.1-nemotron-70b-instruct", "Nemotron 70B", "Reasoning-tuned Llama"),
+        CloudModel("nvidia/llama-3.1-nemotron-ultra-253b-v1", "Nemotron Ultra 253B", "Top-tier reasoning"),
+        CloudModel("nvidia/nemotron-3-super-120b-a12b", "Nemotron-3 Super 120B", "MoE · strong reasoning"),
+        CloudModel("nvidia/nvidia-nemotron-nano-9b-v2", "Nemotron Nano 9B v2", "Small + fast"),
+        CloudModel("nvidia/nemotron-4-340b-instruct", "Nemotron-4 340B", "Flagship dense"),
+        # ── Qwen ──
+        CloudModel("qwen/qwen3-next-80b-a3b-instruct", "Qwen3-Next 80B", "MoE generalist"),
+        CloudModel("qwen/qwen3.5-397b-a17b", "Qwen3.5 397B", "Large MoE"),
+        # ── DeepSeek ──
+        CloudModel("deepseek-ai/deepseek-v4-pro", "DeepSeek V4 Pro", "Frontier reasoning"),
+        CloudModel("deepseek-ai/deepseek-v4-flash", "DeepSeek V4 Flash", "Fast DeepSeek"),
+        # ── Mistral ──
+        CloudModel("mistralai/mistral-large-3-675b-instruct-2512", "Mistral Large 3", "Flagship"),
+        CloudModel("mistralai/mistral-small-4-119b-2603", "Mistral Small 4", "Efficient generalist"),
+        CloudModel("mistralai/mistral-nemotron", "Mistral Nemotron", "NVIDIA-tuned Mistral"),
+        CloudModel("mistralai/codestral-22b-instruct-v0.1", "Codestral 22B", "Code-focused"),
+        # ── Google Gemma ──
+        CloudModel("google/gemma-4-31b-it", "Gemma 4 31B", "Google's latest"),
+        CloudModel("google/gemma-3-12b-it", "Gemma 3 12B", "Mid-size Gemma"),
+        # ── OpenAI open models ──
+        CloudModel("openai/gpt-oss-120b", "GPT-OSS 120B", "OpenAI open model"),
+        CloudModel("openai/gpt-oss-20b", "GPT-OSS 20B", "Smaller open model"),
+        # ── Microsoft Phi ──
+        CloudModel("microsoft/phi-4-mini-instruct", "Phi-4 Mini", "Small + capable"),
+        CloudModel("microsoft/phi-3.5-moe-instruct", "Phi-3.5 MoE", "Mixture-of-experts"),
+        # ── Others ──
+        CloudModel("moonshotai/kimi-k2.6", "Kimi K2.6", "Long-context generalist"),
+        CloudModel("ibm/granite-3.0-8b-instruct", "Granite 3.0 8B", "IBM enterprise model"),
+        CloudModel("ibm/granite-34b-code-instruct", "Granite 34B Code", "Code-focused"),
+        CloudModel("01-ai/yi-large", "Yi Large", "Strong bilingual (EN/中文)"),
+        CloudModel("ai21labs/jamba-1.5-large-instruct", "Jamba 1.5 Large", "Hybrid SSM · long context"),
+        CloudModel("databricks/dbrx-instruct", "DBRX", "Databricks MoE"),
+        CloudModel("bigcode/starcoder2-15b", "StarCoder2 15B", "Code generation"),
     ),
 )
 
@@ -390,7 +403,19 @@ _NON_CHAT_HINTS = (
     "embedding", "whisper", "tts", "text-to-speech", "stable-diffusion",
     "-image", "image-", "rerank", "moderation", "guard", "bge-", "-bge",
     "clip", "transcribe", "audio", "vision-encoder",
+    # non-chat categories seen in NVIDIA NIM's catalog
+    "embed", "reward", "content-safety", "retriev", "translate",
+    "-parse", "gliner", "video-detector", "deplot", "kosmos",
 )
+
+
+def _is_free_model(m: dict) -> bool:
+    """Free marker for a mixed free+paid catalog (OpenRouter): the explicit
+    `:free` model-id suffix. We deliberately do NOT treat "prompt price == 0"
+    as free — some zero-prompt-priced entries are non-chat (e.g. the Lyria
+    music model, priced per-second) or meta-routers (`openrouter/free`)."""
+    mid = (m.get("id") or "") if isinstance(m, dict) else str(m)
+    return mid.endswith(":free")
 
 
 # ─── Live-listing TTL cache (used by /v1/models for dynamic providers) ───
@@ -463,6 +488,10 @@ async def list_live_models(provider: Provider) -> list[dict]:
             continue
         low = mid.lower()
         if any(h in low for h in _NON_CHAT_HINTS):
+            continue
+        # Providers whose catalog mixes free + paid (OpenRouter) → free only,
+        # so we don't dump 300+ mostly-paid models into the picker.
+        if provider.live_free_only and not _is_free_model(m):
             continue
         seen.add(mid)
         out.append({"id": mid, "repo": repo_id(provider.key, mid)})
