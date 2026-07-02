@@ -10,6 +10,24 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.18.1] — 2026-07-02
+
+### Fixed — "502 (No body)" on cloud completions is now an informative error, and logged
+
+Diagnosing continued Story Studio 502s on NVIDIA free models revealed two gaps rather than a broken route (small NVIDIA models answered in 1–2 s throughout):
+
+- **`str(e)` is empty for httpx timeouts.** When NVIDIA's congested free tier queued a big model past our 120 s read timeout (measured: `llama-3.3-70b` took **49 s** to answer an 8-token prompt — sometimes it exceeds the window entirely), the 502's `detail` was `str(httpx.ReadTimeout)` — an empty string. That's the literal "502 (No body)" clients saw. Both cloud error paths (`/api` and `/v1`) now build the detail as `<provider> · <model id>: <ExceptionType>: <message>`, so a timeout reads like `NVIDIA NIM · meta/llama-3.3-70b-instruct: ReadTimeout:` instead of nothing.
+- **`/v1` cloud failures were never logged server-side.** The `/api` streaming path printed tracebacks; the `/v1` path silently returned the 502. Both now print a `[chat studio] cloud error (v1|api): …` line to the service log, so the next "why did this 502" starts with an answer in `logs/service/server.err.log` instead of an empty access-log line.
+
+Verified live: a request for a retired model now returns a 502 whose body names the provider, model, and NVIDIA's full 410 message — and the same line appears in the service log.
+
+### Notes
+
+- PATCH bump (1.18.0 → 1.18.1) — error-reporting only, no behavior change on success paths. **Just run Update** (or Update & Restart in service mode).
+- Root cause of the ongoing 502s themselves is upstream: NVIDIA's free tier heavily queues large models (70B-class) at the moment. Small/mid models (8B, Gemma 4 31B) are fast. Clients that need reliability should pick a smaller NVIDIA model, another free provider, or turn on Uninterrupted Mode in the Chat UI.
+
+---
+
 ## [1.18.0] — 2026-07-02
 
 ### Added — six more providers (20 total)

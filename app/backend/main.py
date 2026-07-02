@@ -714,7 +714,12 @@ async def chat_completions(body: ChatCompletionsBody):
                 chunks.append(c)
             return {"repo": body.repo, "content": "".join(chunks)}
         except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e))
+            # str(e) alone is EMPTY for httpx timeouts — always include the
+            # exception type so the client never sees a bodyless 502, and
+            # log it (with the model) so the failure is visible server-side.
+            detail = f"{provider.name} · {model.id}: {type(e).__name__}: {e}".rstrip(": ")
+            print(f"[chat studio] cloud error (api): {detail}", file=sys.stderr, flush=True)
+            raise HTTPException(status_code=502, detail=detail)
 
     # Auto-load the requested local model if it's cached but not loaded
     # (off the event loop so a multi-GB load doesn't stall other requests).
@@ -875,7 +880,13 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
                 chunks.append(c)
             text = "".join(chunks)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e))
+            # str(e) alone is EMPTY for httpx timeouts (this is exactly the
+            # "502 (No body)" clients used to see when NVIDIA hung on a big
+            # model) — always include the exception type, and log server-side
+            # with the model id so /v1 failures show up in the service log.
+            detail = f"{provider.name} · {model.id}: {type(e).__name__}: {e}".rstrip(": ")
+            print(f"[chat studio] cloud error (v1): {detail}", file=sys.stderr, flush=True)
+            raise HTTPException(status_code=502, detail=detail)
         return {
             "id": completion_id,
             "object": "chat.completion",
