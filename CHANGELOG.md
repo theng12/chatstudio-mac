@@ -10,6 +10,23 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.15.3] — 2026-07-02
+
+### Fixed — NVIDIA is now live-listed too, closing the stale-id 502 window for good
+
+Root cause of the Story Studio 502 report, from the service logs: `/v1/chat/completions` calls using `google/gemma-3-27b-it` got **HTTP 410 Gone** from NVIDIA (*"reached its end of life on 2026-05-12"*) and `qwen/qwen2.5-coder-32b-instruct` got **HTTP 404** (*"Function … not found"* — NVIDIA's phrasing for a delisted model), both relayed to the client as 502. v1.15.2 already dropped those two stale ids from the curated list, but the failure mode remained open: any future NVIDIA retirement would silently re-create it, because `/v1/models` advertised a hand-maintained snapshot.
+
+- **NVIDIA now has `supports_live_listing=True`** — the same 60s-TTL live-listing mechanism OpenRouter uses — so `/v1/models` serves NVIDIA's actual current catalog and can no longer advertise a model their API stopped hosting. The expanded 32-model curated list from v1.15.2 stays as the offline/error fallback (and remains what the Settings UI shows before "Load all models"). This supersedes v1.15.2's "NVIDIA is served as a static list" note.
+- NVIDIA's live catalog is ~100 models with no paid tier (all free with an API key), so `live_free_only` doesn't apply; the tightened non-chat filter from v1.15.2 keeps the live list chat-relevant.
+
+**Verified:** completion against `provider:nvidia:google/gemma-4-31b-it` returns HTTP 200 with a real reply; both dead ids absent from `/v1/models`.
+
+### Notes
+
+- PATCH bump (1.15.2 → 1.15.3) — backend config only, no new deps, no schema change. **Just run Update** (or Update & Restart in service mode).
+
+---
+
 ## [1.15.2] — 2026-07-01
 
 ### Changed — cloud model surfacing (NVIDIA + OpenRouter)

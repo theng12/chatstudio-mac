@@ -116,9 +116,14 @@ NVIDIA = Provider(
     docs_url="https://build.nvidia.com/explore/discover",
     # NVIDIA NIM hosts 100+ models free for developers. This is a curated slice
     # of the most useful chat/coding/reasoning ones (all verified present in the
-    # live catalog); the "Load all models" button fetches the full list. Kept
-    # server-side so API consumers (e.g. Story Studio) see them without a
-    # browser-side live fetch.
+    # live catalog); the "Load all models" button fetches the full list.
+    #
+    # Live-listed because NVIDIA retires hosted models on a schedule (e.g.
+    # gemma-3-27b-it went 410 Gone on 2026-05-12 while still curated here, so
+    # /v1/models advertised an id that 502'd on use — hit by Story Studio).
+    # With live listing, /v1/models serves NVIDIA's actual current catalog
+    # (60s TTL cache); the curated list below is the offline/error fallback.
+    supports_live_listing=True,
     models=(
         # ── Llama family ──
         CloudModel("meta/llama-3.3-70b-instruct", "Llama 3.3 70B", "Strong generalist"),
