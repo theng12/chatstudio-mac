@@ -10,6 +10,28 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.18.0] — 2026-07-02
+
+### Added — six more providers (20 total)
+
+All endpoints probe-verified before wiring (each answered a real 401/400 at its documented path):
+
+- **Mistral La Plateforme** — official API with a genuine rate-limited **free tier** (same model as Gemini AI Studio), so its curated models (Large, Medium, Small, Magistral, Codestral, Nemo) live in the **☁ Free tab**. Live-listed.
+- **Together AI** — big open-model catalog (Llama, Qwen, DeepSeek, Mixtral). Live-listed, paid.
+- **xAI (Grok)** — Grok 4.3 / 4 / 3-mini direct. Live-listed, paid.
+- **Fireworks AI** — fast open-model serving (note their long `accounts/fireworks/models/…` id format). Live-listed, paid.
+- **Moonshot (Kimi)** — Kimi K-series direct via the global endpoint. Live-listed, paid.
+- **Perplexity** — search-grounded answers with live web citations; a genuinely different capability from other providers. Static list (no `/models` endpoint; also NB their API has no `/v1` prefix). Paid.
+
+All existing machinery applies automatically: all-paid providers stay hidden until their paid toggle is on, live lists refresh on a 60s TTL with curated fallback, the error-in-200 guard covers streaming quirks, and models sort themselves into the ☁ Free / 💳 Paid tabs per model.
+
+### Notes
+
+- MINOR bump (1.17.1 → 1.18.0) — new providers, no new deps, no schema change. **Just run Update** (or Update & Restart in service mode).
+- Curated ids are best-effort for the paid five (unverifiable without keys) — live listing corrects drift on the five that support it; Perplexity's `sonar*` family is stable.
+
+---
+
 ## [1.17.1] — 2026-07-02
 
 ### Fixed — live-loaded models on an all-paid provider landed in the ☁ Free tab

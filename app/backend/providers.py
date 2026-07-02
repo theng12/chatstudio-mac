@@ -438,10 +438,110 @@ KIE = Provider(
 )
 
 
+MISTRAL = Provider(
+    key="mistral",
+    name="Mistral La Plateforme",
+    # Official Mistral API. Has a genuine free tier (rate-limited "experiment"
+    # plan — same free-with-limits model as Gemini AI Studio), so the curated
+    # models are marked free and live in the ☁ Free tab.
+    base_url="https://api.mistral.ai/v1",
+    env_var="CHATSTUDIO_MISTRAL_API_KEY",
+    docs_url="https://console.mistral.ai/api-keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("mistral-large-latest", "Mistral Large", "Flagship generalist"),
+        CloudModel("mistral-medium-latest", "Mistral Medium", "Balanced quality/speed"),
+        CloudModel("mistral-small-latest", "Mistral Small", "Fast + light"),
+        CloudModel("magistral-medium-latest", "Magistral Medium", "Reasoning-tuned"),
+        CloudModel("codestral-latest", "Codestral", "Code-focused"),
+        CloudModel("open-mistral-nemo", "Mistral Nemo 12B", "Open small model"),
+    ),
+)
+
+
+TOGETHER = Provider(
+    key="together",
+    name="Together AI",
+    base_url="https://api.together.xyz/v1",
+    env_var="CHATSTUDIO_TOGETHER_API_KEY",
+    docs_url="https://api.together.ai/settings/api-keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("meta-llama/Llama-3.3-70B-Instruct-Turbo", "Llama 3.3 70B Turbo", "Fast open generalist", free=False),
+        CloudModel("Qwen/Qwen2.5-72B-Instruct-Turbo", "Qwen 2.5 72B Turbo", "Strong coding + multilingual", free=False),
+        CloudModel("deepseek-ai/DeepSeek-V3", "DeepSeek V3", "Strong general chat", free=False),
+        CloudModel("mistralai/Mixtral-8x7B-Instruct-v0.1", "Mixtral 8x7B", "Classic MoE", free=False),
+    ),
+)
+
+
+XAI = Provider(
+    key="xai",
+    name="xAI (Grok)",
+    base_url="https://api.x.ai/v1",
+    env_var="CHATSTUDIO_XAI_API_KEY",
+    docs_url="https://console.x.ai",
+    supports_live_listing=True,
+    models=(
+        CloudModel("grok-4.3", "Grok 4.3", "xAI flagship", free=False),
+        CloudModel("grok-4", "Grok 4", "Previous flagship", free=False),
+        CloudModel("grok-3-mini", "Grok 3 mini", "Fast + affordable", free=False),
+    ),
+)
+
+
+FIREWORKS = Provider(
+    key="fireworks",
+    name="Fireworks AI",
+    base_url="https://api.fireworks.ai/inference/v1",
+    env_var="CHATSTUDIO_FIREWORKS_API_KEY",
+    docs_url="https://fireworks.ai/account/api-keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("accounts/fireworks/models/llama-v3p3-70b-instruct", "Llama 3.3 70B", "Fast open serving", free=False),
+        CloudModel("accounts/fireworks/models/deepseek-v3", "DeepSeek V3", "Strong general chat", free=False),
+        CloudModel("accounts/fireworks/models/qwen2p5-coder-32b-instruct", "Qwen 2.5 Coder 32B", "Code-focused", free=False),
+    ),
+)
+
+
+MOONSHOT = Provider(
+    key="moonshot",
+    name="Moonshot (Kimi)",
+    base_url="https://api.moonshot.ai/v1",
+    env_var="CHATSTUDIO_MOONSHOT_API_KEY",
+    docs_url="https://platform.moonshot.ai/console/api-keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("kimi-latest", "Kimi (latest)", "Always the newest K-series", free=False),
+        CloudModel("kimi-k2.6", "Kimi K2.6", "Long-context generalist", free=False),
+    ),
+)
+
+
+PERPLEXITY = Provider(
+    key="perplexity",
+    name="Perplexity",
+    # Search-grounded answers with live web citations — a different capability
+    # from the other providers, not just another model host. NB: their API has
+    # no /v1 prefix and no /models endpoint, so static curated list only.
+    base_url="https://api.perplexity.ai",
+    env_var="CHATSTUDIO_PERPLEXITY_API_KEY",
+    docs_url="https://www.perplexity.ai/settings/api",
+    models=(
+        CloudModel("sonar", "Sonar", "Search-grounded · fast", free=False),
+        CloudModel("sonar-pro", "Sonar Pro", "Search-grounded · deeper", free=False),
+        CloudModel("sonar-reasoning", "Sonar Reasoning", "Search + reasoning", free=False),
+        CloudModel("sonar-deep-research", "Sonar Deep Research", "Long-running research reports", free=False),
+    ),
+)
+
+
 PROVIDERS: dict[str, Provider] = {
     p.key: p for p in (
         OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI, HFROUTER, SAMBANOVA, GITHUB,
         OPENAI, ANTHROPIC, DEEPSEEK, OPENCODE, FAL, KIE,
+        MISTRAL, TOGETHER, XAI, FIREWORKS, MOONSHOT, PERPLEXITY,
     )
 }
 
