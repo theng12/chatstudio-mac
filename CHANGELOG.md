@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.17.1] — 2026-07-02
+
+### Fixed — live-loaded models on an all-paid provider landed in the ☁ Free tab
+
+The free/paid tab split has always been **per-model** (a mixed provider like OpenCode shows its 4 free models under ☁ Free and its 7 paid under 💳 Paid; same for OpenRouter's free tier vs paid flagships) — but "Load all models" hardcoded `free: true` on every live-fetched entry. On an all-paid provider (fal.ai, or official OpenAI/DeepSeek once live-listed), those models bill the user's account yet appeared under ☁ Free without a 💲 marker. No billing risk — the server's paid gate 403'd them regardless — but the tab was wrong and selecting one produced a confusing 403.
+
+`GET /api/providers` now exposes `all_paid` per provider, and the picker marks live-fetched models on an all-paid provider as paid (💲, 💳 tab, behind the toggle). Verified live: `all_paid` correctly True for openai/anthropic/deepseek/fal/kie and False for opencode (its free tier keeps it mixed) and all free-tier providers.
+
+### Notes
+
+- PATCH bump (1.17.0 → 1.17.1) — one flag in `public_view()` + picker labeling, no schema change. **Just run Update** (or Update & Restart in service mode).
+
+---
+
 ## [1.17.0] — 2026-07-02
 
 ### Added — two more paid providers: fal.ai and Kie.ai (14 total)

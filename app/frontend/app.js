@@ -234,9 +234,15 @@ function studio() {
           for (const m of (models || [])) {
             if (have.has(m.repo)) continue;
             have.add(m.repo);
+            // On an all-paid provider (fal, official OpenAI/Anthropic/
+            // DeepSeek) every live-fetched model bills the user's account —
+            // mark it paid so it lands in the 💳 tab behind the toggle, not
+            // in ☁ Free. Free-tier providers' live models stay free.
+            const isFree = !p.all_paid;
             clouds.push({
-              repo: m.repo, label: m.id, source: 'cloud', provider: pkey,
-              provider_name: p.name, notes: 'live', key_set: p.key_set, free: true, live: true,
+              repo: m.repo, label: m.id + (isFree ? '' : ' 💲'), source: 'cloud', provider: pkey,
+              provider_name: p.name, notes: 'live', key_set: p.key_set,
+              free: isFree, paid_enabled: p.paid_enabled, live: true,
             });
           }
         }

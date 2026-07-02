@@ -531,6 +531,7 @@ def public_view() -> list[dict]:
             "key_masked": _mask(token) if token else "",
             "reuse_hf_token": p.reuse_hf_token,
             "has_paid": any(not m.free for m in p.models),
+            "all_paid": all_paid(p),
             "paid_enabled": paid_enabled(p.key),
             "models": [
                 {"id": m.id, "label": m.label, "notes": m.notes, "free": m.free,
