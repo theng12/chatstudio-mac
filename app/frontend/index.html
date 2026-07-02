@@ -128,7 +128,8 @@
           <div class="model-select">
             <div class="seg modeltabs">
               <button type="button" :class="{active: effectiveModelTab()==='local'}" @click="setModelTab('local')">🖥 Local</button>
-              <button type="button" :class="{active: effectiveModelTab()==='cloud'}" @click="setModelTab('cloud')">☁ Cloud</button>
+              <button type="button" :class="{active: effectiveModelTab()==='cloud'}" @click="setModelTab('cloud')">☁ Free</button>
+              <button type="button" :class="{active: effectiveModelTab()==='paid'}" @click="setModelTab('paid')">💳 Paid</button>
             </div>
             <select x-model="selectedRepo" @change="onPickModel()">
               <template x-if="groupedModels().length === 0">

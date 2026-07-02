@@ -176,6 +176,7 @@ GROQ = Provider(
     base_url="https://api.groq.com/openai/v1",
     env_var="CHATSTUDIO_GROQ_API_KEY",
     docs_url="https://console.groq.com/keys",
+    supports_live_listing=True,
     models=(
         CloudModel(
             "llama-3.3-70b-versatile",
@@ -207,6 +208,7 @@ CEREBRAS = Provider(
     base_url="https://api.cerebras.ai/v1",
     env_var="CHATSTUDIO_CEREBRAS_API_KEY",
     docs_url="https://cloud.cerebras.ai",
+    supports_live_listing=True,
     models=(
         CloudModel(
             "llama3.1-8b",
@@ -235,6 +237,7 @@ GEMINI = Provider(
     base_url="https://generativelanguage.googleapis.com/v1beta/openai",
     env_var="CHATSTUDIO_GEMINI_API_KEY",
     docs_url="https://aistudio.google.com/apikey",
+    supports_live_listing=True,
     models=(
         CloudModel(
             "gemini-3.5-flash",
@@ -263,6 +266,7 @@ HFROUTER = Provider(
     base_url="https://router.huggingface.co/v1",
     env_var="CHATSTUDIO_HFROUTER_API_KEY",
     docs_url="https://huggingface.co/settings/tokens",
+    supports_live_listing=True,
     reuse_hf_token=True,   # uses your saved HF token if no separate key is set
     models=(
         CloudModel("Qwen/Qwen3.5-9B", "Qwen3.5 9B", "Small + fast"),
@@ -280,6 +284,7 @@ SAMBANOVA = Provider(
     base_url="https://api.sambanova.ai/v1",
     env_var="CHATSTUDIO_SAMBANOVA_API_KEY",
     docs_url="https://cloud.sambanova.ai/apis",
+    supports_live_listing=True,
     models=(
         CloudModel("Meta-Llama-3.3-70B-Instruct", "Llama 3.3 70B", "Fast generalist"),
         CloudModel("DeepSeek-V3.1", "DeepSeek V3.1", "Strong general chat"),
@@ -297,6 +302,7 @@ GITHUB = Provider(
     base_url="https://models.github.ai/inference",
     env_var="CHATSTUDIO_GITHUB_API_KEY",
     docs_url="https://github.com/settings/tokens",
+    supports_live_listing=True,
     models=(
         CloudModel("openai/gpt-4o-mini", "GPT-4o mini", "Fast OpenAI model"),
         CloudModel("openai/gpt-4.1", "GPT-4.1", "Strong coding + long context"),
@@ -308,8 +314,95 @@ GITHUB = Provider(
 )
 
 
+# ═══════════ Paid / official providers ═══════════
+# These bill per token from the user's own account. Every model is marked
+# free=False, so nothing here is listed or routable until the user flips the
+# provider's "Enable paid models" toggle in Settings — same guard the paid
+# OpenRouter flagships already use. (OpenCode Zen is the exception: it ships
+# a few genuinely free models, marked free=True below.)
+
+OPENAI = Provider(
+    key="openai",
+    name="OpenAI (official)",
+    base_url="https://api.openai.com/v1",
+    env_var="CHATSTUDIO_OPENAI_API_KEY",
+    docs_url="https://platform.openai.com/api-keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("gpt-5.5", "GPT-5.5", "Flagship", free=False),
+        CloudModel("gpt-5.4", "GPT-5.4", "Strong generalist", free=False),
+        CloudModel("gpt-5.4-mini", "GPT-5.4 mini", "Fast + affordable", free=False),
+        CloudModel("gpt-5.4-nano", "GPT-5.4 nano", "Cheapest tier", free=False),
+        CloudModel("gpt-5.3-codex", "GPT-5.3 Codex", "Code-focused", free=False),
+        CloudModel("gpt-4.1", "GPT-4.1", "Proven stable · long context", free=False),
+    ),
+)
+
+
+ANTHROPIC = Provider(
+    key="anthropic",
+    name="Anthropic (official)",
+    # Anthropic's OpenAI-SDK compatibility layer: /v1/chat/completions works
+    # with a normal Bearer token. Their /v1/models listing uses the native
+    # x-api-key auth instead, so live listing is off — curated list only.
+    base_url="https://api.anthropic.com/v1",
+    env_var="CHATSTUDIO_ANTHROPIC_API_KEY",
+    docs_url="https://console.anthropic.com/settings/keys",
+    models=(
+        CloudModel("claude-fable-5", "Claude Fable 5", "Newest generation", free=False),
+        CloudModel("claude-opus-4-8", "Claude Opus 4.8", "Deepest reasoning", free=False),
+        CloudModel("claude-sonnet-5", "Claude Sonnet 5", "Workhorse · great coding", free=False),
+        CloudModel("claude-haiku-4-5", "Claude Haiku 4.5", "Fast + affordable", free=False),
+    ),
+)
+
+
+DEEPSEEK = Provider(
+    key="deepseek",
+    name="DeepSeek (official)",
+    base_url="https://api.deepseek.com/v1",
+    env_var="CHATSTUDIO_DEEPSEEK_API_KEY",
+    docs_url="https://platform.deepseek.com/api_keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("deepseek-chat", "DeepSeek Chat", "Latest V-series chat model", free=False),
+        CloudModel("deepseek-reasoner", "DeepSeek Reasoner", "Reasoning (R-series)", free=False),
+    ),
+)
+
+
+OPENCODE = Provider(
+    key="opencode",
+    name="OpenCode Zen",
+    # Coding-focused model gateway (opencode.ai). OpenAI-style
+    # /chat/completions; their /models endpoint is metadata-shaped rather
+    # than OpenAI-shaped, so live listing is off — curated list only.
+    base_url="https://opencode.ai/zen/v1",
+    env_var="CHATSTUDIO_OPENCODE_API_KEY",
+    docs_url="https://opencode.ai/auth",
+    models=(
+        # ── Free tier ──
+        CloudModel("big-pickle", "Big Pickle (free)", "Free coding model"),
+        CloudModel("nemotron-3-ultra-free", "Nemotron-3 Ultra (free)", "Free reasoning"),
+        CloudModel("deepseek-v4-flash-free", "DeepSeek V4 Flash (free)", "Free · fast"),
+        CloudModel("mimo-v2.5-free", "MiMo v2.5 (free)", "Free small model"),
+        # ── Paid (billed against your OpenCode credit) ──
+        CloudModel("gpt-5.3-codex", "GPT-5.3 Codex", "Code-focused OpenAI", free=False),
+        CloudModel("claude-sonnet-5", "Claude Sonnet 5", "Strong coding", free=False),
+        CloudModel("kimi-k2.7-code", "Kimi K2.7 Code", "Code-tuned Kimi", free=False),
+        CloudModel("qwen3.7-max", "Qwen3.7 Max", "Alibaba flagship", free=False),
+        CloudModel("glm-5.2", "GLM 5.2", "Strong open frontier", free=False),
+        CloudModel("deepseek-v4-pro", "DeepSeek V4 Pro", "Frontier reasoning", free=False),
+        CloudModel("minimax-m3", "MiniMax M3", "MiniMax frontier", free=False),
+    ),
+)
+
+
 PROVIDERS: dict[str, Provider] = {
-    p.key: p for p in (OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI, HFROUTER, SAMBANOVA, GITHUB)
+    p.key: p for p in (
+        OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI, HFROUTER, SAMBANOVA, GITHUB,
+        OPENAI, ANTHROPIC, DEEPSEEK, OPENCODE,
+    )
 }
 
 
@@ -355,7 +448,10 @@ def parse_repo(repo: str) -> Optional[tuple[Provider, CloudModel]]:
             return p, m
     # Unknown model id on a known provider — still let it through so we
     # don't break if the provider adds a model before we update the list.
-    return p, CloudModel(id=model_id, label=model_id)
+    # On an all-paid provider (OpenAI/Anthropic/DeepSeek official) every
+    # unknown model is still paid — mark it so the paid gate applies rather
+    # than letting a novel id bill the user without the toggle.
+    return p, CloudModel(id=model_id, label=model_id, free=not all_paid(p))
 
 
 def paid_enabled(key: str) -> bool:
@@ -368,6 +464,13 @@ def model_allowed(provider: Provider, model: CloudModel) -> bool:
     paid toggle is on. Guards the chat route so a paid model can't be used
     (and billed) until explicitly enabled."""
     return model.free or paid_enabled(provider.key)
+
+
+def all_paid(provider: Provider) -> bool:
+    """True when every curated model is paid (official OpenAI/Anthropic/
+    DeepSeek). Such a provider is hidden from listings entirely — and its
+    live-listed ids are paid-gated — until the paid toggle is on."""
+    return bool(provider.models) and all(not m.free for m in provider.models)
 
 
 def public_view() -> list[dict]:
@@ -411,6 +514,8 @@ _NON_CHAT_HINTS = (
     # non-chat categories seen in NVIDIA NIM's catalog
     "embed", "reward", "content-safety", "retriev", "translate",
     "-parse", "gliner", "video-detector", "deplot", "kosmos",
+    # non-chat entries in OpenAI's /models (legacy bases, image, realtime)
+    "dall-e", "davinci", "babbage", "realtime", "-instruct-0914",
 )
 
 
@@ -432,38 +537,68 @@ _LIVE_CACHE_TTL_S = 60.0
 
 
 def _static_models(provider: Provider) -> list[dict]:
-    """The curated catalog rendered in the {id, repo} shape /v1/models expects."""
+    """The curated catalog (respecting the paid gate) in the {id, repo}
+    shape /v1/models expects."""
     return [
         {"id": m.id, "repo": repo_id(provider.key, m.id)}
         for m in provider.models
+        if model_allowed(provider, m)
     ]
 
 
-async def models_for_provider(provider: Provider) -> list[dict]:
-    """Return [{id, repo}, ...] for a provider, picking the strategy that
-    fits: live-fetch with TTL cache for providers flagged
-    `supports_live_listing` (currently just OpenRouter), curated static
-    list for the rest. Failures always degrade to the static list — this
-    function never raises, so /v1/models can safely fan out across all
-    providers without a single bad provider taking the response down."""
-    if not provider.supports_live_listing:
-        return _static_models(provider)
-
+async def _cached_live_models(provider: Provider) -> Optional[list[dict]]:
+    """Raw live fetch behind the TTL cache. Returns None (also cached, so a
+    flapping upstream isn't retried on every call) when the fetch fails."""
     now = time.time()
     cached = _LIVE_CACHE.get(provider.key)
     if cached and (now - cached[0]) < _LIVE_CACHE_TTL_S:
         return cached[1]
     try:
         models = await list_live_models(provider)
-        _LIVE_CACHE[provider.key] = (now, models)
-        return models
     except Exception:
-        # Network error, auth error, upstream 5xx — fall back to static.
-        # Cache the fallback briefly so a flapping upstream doesn't make us
-        # retry on every request and time out /v1/models.
-        fallback = _static_models(provider)
-        _LIVE_CACHE[provider.key] = (now, fallback)
-        return fallback
+        models = None
+    _LIVE_CACHE[provider.key] = (now, models)
+    return models
+
+
+async def models_for_provider(provider: Provider) -> list[dict]:
+    """Return [{id, repo}, ...] for a provider: live-fetch (TTL-cached) for
+    providers flagged `supports_live_listing`, curated static list otherwise,
+    always respecting the paid gate. Never raises — /v1/models can safely
+    fan out across all providers.
+
+    Paid filtering happens HERE, per call — not inside the cache — so
+    flipping a provider's paid toggle takes effect on the next request
+    instead of after the TTL expires.
+    """
+    # All-paid provider (official OpenAI/Anthropic/DeepSeek) with the paid
+    # toggle off: hide entirely. No key alone isn't consent to spend money.
+    if all_paid(provider) and not paid_enabled(provider.key):
+        return []
+
+    if not provider.supports_live_listing:
+        return _static_models(provider)
+
+    live = await _cached_live_models(provider)
+    if live is None:
+        return _static_models(provider)
+
+    curated = {m.id: m for m in provider.models}
+    # Drop live ids whose curated entry says paid while the toggle is off
+    # (e.g. Gemini's live list includes gemini-2.5-pro, curated as paid) —
+    # otherwise we'd advertise a model the chat route would 403.
+    out = [
+        e for e in live
+        if e["id"] not in curated or model_allowed(provider, curated[e["id"]])
+    ]
+    # Append allowed curated models the live list didn't include — this is
+    # how OpenRouter's paid flagships surface once its paid toggle is on
+    # (its live fetch is free-only by design).
+    seen = {e["id"] for e in out}
+    for m in provider.models:
+        if m.id not in seen and model_allowed(provider, m):
+            out.append({"id": m.id, "repo": repo_id(provider.key, m.id)})
+    return out
 
 
 async def list_live_models(provider: Provider) -> list[dict]:
@@ -489,7 +624,14 @@ async def list_live_models(provider: Provider) -> list[dict]:
     out, seen = [], set()
     for m in (items or []):
         mid = m.get("id") if isinstance(m, dict) else (m if isinstance(m, str) else None)
-        if not mid or mid in seen:
+        if not mid:
+            continue
+        # Gemini's OpenAI-compat /models returns ids as "models/gemini-…";
+        # its /chat/completions accepts the bare id, and the bare form keeps
+        # our synthetic provider:key:id repos consistent across providers.
+        if mid.startswith("models/"):
+            mid = mid[len("models/"):]
+        if mid in seen:
             continue
         low = mid.lower()
         if any(h in low for h in _NON_CHAT_HINTS):

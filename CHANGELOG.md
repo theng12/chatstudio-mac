@@ -10,6 +10,32 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.16.0] — 2026-07-02
+
+### Added — Paid cloud providers + a three-way model picker (Local · Free · Paid)
+
+The model catalog now has three explicit categories: **Local (MLX)**, **Free Cloud API**, and **Paid Cloud API**.
+
+- **Four new paid providers**, pluggable the same way as the existing ones (Settings → Cloud providers → paste key → flip "Enable paid models"):
+  - **OpenAI (official)** — `api.openai.com`, live-listed, curated fallback (GPT-5.5/5.4/5.3-codex/4.1)
+  - **Anthropic (official)** — via their OpenAI-compat layer; curated list (Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5). Static — their `/models` uses native auth, not Bearer.
+  - **DeepSeek (official)** — `api.deepseek.com`, live-listed (deepseek-chat, deepseek-reasoner)
+  - **OpenCode Zen** — coding-focused gateway (opencode.ai). Mixed catalog: **4 free models usable without the paid toggle** (Big Pickle, Nemotron-3 Ultra free, DeepSeek V4 Flash free, MiMo v2.5 free) plus 7 paid ones billed against OpenCode credit. Static list — their `/models` is metadata-shaped, not OpenAI-shaped.
+- **Money-safety guards for all-paid providers:** a provider whose models are all paid (OpenAI/Anthropic/DeepSeek) is hidden from `/v1/models` and the picker entirely — even with a key saved — until its paid toggle is on. A key alone isn't consent to spend. Unknown model ids on an all-paid provider are also treated as paid (`parse_repo`), so a hand-typed novel id can't slip past the 403 gate.
+- **OpenRouter's paid flagships now surface in `/v1/models`** when its paid toggle is on (previously curated-only in the UI): the free-only live list gets the allowed curated paid models appended. Toggling takes effect on the very next call — paid filtering happens per-request, outside the 60s live cache.
+- **Chat picker is now three tabs** — 🖥 Local · ☁ Free · 💳 Paid. The Paid tab shows each provider's 💲 models, with the group disabled (and labeled why) until both the key is set and paid is enabled.
+
+### Changed — every free provider is live-listed now
+
+Groq, Cerebras, Gemini, HF Router, SambaNova, and GitHub Models joined OpenRouter and NVIDIA on the 60s-TTL live listing — `/v1/models` reflects each provider's actual current catalog, so a retired model can no longer be advertised and 502 on use (the v1.15.3 bug class, now closed for **all** providers). Curated lists remain as offline/error fallbacks. Verified live: Gemini went 4 curated → 36 live models (with their `models/` id prefix normalized away and the paid-curated `gemini-2.5-pro` correctly excluded while paid is off), HF Router 5 → 121.
+
+### Notes
+
+- MINOR bump (1.15.3 → 1.16.0) — new feature + new providers, no new Python deps, no schema change. **Just run Update** (or Update & Restart in service mode).
+- Not live-verified: actual paid completions on the four new providers (no keys configured on this machine yet) — the routing/gating machinery is identical to OpenRouter's, which is verified. Paste a key, enable paid, and the models appear in the 💳 tab and `/v1/models`.
+
+---
+
 ## [1.15.3] — 2026-07-02
 
 ### Fixed — NVIDIA is now live-listed too, closing the stale-id 502 window for good

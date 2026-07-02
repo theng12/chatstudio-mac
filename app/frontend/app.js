@@ -44,7 +44,7 @@ function studio() {
     providerTests: {},
     liveModels: {},        // { providerKey: [{id, repo}] } fetched on demand
     liveLoading: null,
-    modelTab: null,        // 'local' | 'cloud' (null = auto-pick)
+    modelTab: null,        // 'local' | 'cloud' (free) | 'paid' (null = auto-pick)
     showAllProviders: false, // cloud tab: also show providers with no key (greyed)
     routerProviders: [],   // ordered fallback list {id,name,kind,enabled,key_set}
     providerHealth: {},    // { id: 'online'|'offline'|'rate_limited'|'no_key'|'slow'|'unknown' }
@@ -205,9 +205,10 @@ function studio() {
         const clouds = [];
         for (const p of (prov.providers || [])) {
           for (const m of p.models) {
-            // Paid models stay hidden from the dropdown until the user enables
-            // paid for that provider.
-            if (!m.free && !p.paid_enabled) continue;
+            // Paid models are kept in the list so the 💳 Paid tab can show
+            // them — the tab renders the group disabled (with a hint) until
+            // the provider's paid toggle is on, and the server 403s any
+            // attempt to route a paid model without the toggle regardless.
             clouds.push({
               repo: m.repo,
               label: m.label + (m.free ? '' : ' 💲'),
@@ -217,6 +218,7 @@ function studio() {
               notes: m.notes,
               key_set: p.key_set,
               free: m.free,
+              paid_enabled: p.paid_enabled,
             });
           }
         }
@@ -251,22 +253,30 @@ function studio() {
     },
     // Optgroups for the model <select>, scoped to the active tab.
     //  · Local tab → one "Local (MLX)" group.
-    //  · Cloud tab → one group per provider (so identical model names from
-    //    different providers stay distinguishable). Providers with no API key
-    //    are hidden unless "show all" is on, and then rendered greyed/disabled.
+    //  · Free tab → free cloud models, one group per provider (so identical
+    //    model names from different providers stay distinguishable).
+    //  · Paid tab → paid cloud models (💲); a provider's group stays disabled
+    //    until BOTH its key is set and its paid toggle is on, with the label
+    //    saying which one is missing.
+    // Keyless providers are hidden unless "show all" is on, then greyed.
     groupedModels() {
       const tab = this.effectiveModelTab();
       if (tab === 'local') {
         const locals = this.chatModels.filter(m => m.source === 'local');
         return locals.length ? [{ label: '🖥 Local (MLX)', models: locals, disabled: false }] : [];
       }
+      const wantPaid = tab === 'paid';
       const order = [];
       const byProv = {};
       for (const m of this.chatModels) {
         if (m.source !== 'cloud') continue;
+        if (!!m.free === wantPaid) continue;   // free ↔ paid tab split
         const k = m.provider || 'cloud';
         if (!byProv[k]) {
-          byProv[k] = { label: '☁ ' + (m.provider_name || 'Cloud'), models: [], key_set: !!m.key_set };
+          byProv[k] = {
+            label: (wantPaid ? '💳 ' : '☁ ') + (m.provider_name || 'Cloud'),
+            models: [], key_set: !!m.key_set, paid_enabled: !!m.paid_enabled,
+          };
           order.push(k);
         }
         byProv[k].models.push(m);
@@ -274,9 +284,10 @@ function studio() {
       const groups = [];
       for (const k of order) {
         const g = byProv[k];
-        g.disabled = !g.key_set;
-        if (g.disabled && !this.showAllProviders) continue;  // keyless hidden by default
-        if (g.disabled) g.label += ' — needs key';
+        g.disabled = !g.key_set || (wantPaid && !g.paid_enabled);
+        if (!g.key_set && !this.showAllProviders) continue;  // keyless hidden by default
+        if (!g.key_set) g.label += ' — needs key';
+        else if (wantPaid && !g.paid_enabled) g.label += ' — enable paid in Settings';
         groups.push(g);
       }
       return groups;
