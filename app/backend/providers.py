@@ -398,10 +398,50 @@ OPENCODE = Provider(
 )
 
 
+FAL = Provider(
+    key="fal",
+    name="fal.ai",
+    # fal's OpenRouter-powered OpenAI-compatible LLM gateway. Bearer auth
+    # with a normal FAL key (verified: their endpoint parses Bearer tokens).
+    # Bills through fal credits, so everything is gated as paid. Live-listed
+    # — their /models works once a key is present.
+    base_url="https://fal.run/openrouter/router/openai/v1",
+    env_var="CHATSTUDIO_FAL_API_KEY",
+    docs_url="https://fal.ai/dashboard/keys",
+    supports_live_listing=True,
+    models=(
+        CloudModel("openai/gpt-5.2", "GPT-5.2 (via fal)", "OpenAI via fal credits", free=False),
+        CloudModel("anthropic/claude-sonnet-4.6", "Claude Sonnet 4.6 (via fal)", "Anthropic via fal credits", free=False),
+        CloudModel("google/gemini-2.5-flash", "Gemini 2.5 Flash (via fal)", "Google via fal credits", free=False),
+        CloudModel("meta-llama/llama-3.3-70b-instruct", "Llama 3.3 70B (via fal)", "Open generalist", free=False),
+        CloudModel("deepseek/deepseek-chat-v3.1", "DeepSeek V3.1 (via fal)", "DeepSeek via fal credits", free=False),
+    ),
+)
+
+
+KIE = Provider(
+    key="kie",
+    name="Kie.ai",
+    # Kie's unified chat API (OpenAI-shaped requests, Bearer auth). Quirk:
+    # errors come back as HTTP 200 with {"code":401,"msg":...} — handled by
+    # the trailing-body guard in stream_chat(). No /models endpoint (404),
+    # so live listing is off; ids below come from kie.ai/market/chat.
+    base_url="https://kieai.erweima.ai/api/v1",
+    env_var="CHATSTUDIO_KIE_API_KEY",
+    docs_url="https://kie.ai/api-key",
+    models=(
+        CloudModel("gpt-5.6", "GPT-5.6 (via Kie)", "OpenAI via Kie credits", free=False),
+        CloudModel("claude-fable-5", "Claude Fable 5 (via Kie)", "Anthropic via Kie credits", free=False),
+        CloudModel("claude-opus-4.8", "Claude Opus 4.8 (via Kie)", "Deep reasoning · 1M context", free=False),
+        CloudModel("deepseek-chat", "DeepSeek Chat (via Kie)", "Chat + coding", free=False),
+    ),
+)
+
+
 PROVIDERS: dict[str, Provider] = {
     p.key: p for p in (
         OPENROUTER, NVIDIA, GROQ, CEREBRAS, GEMINI, HFROUTER, SAMBANOVA, GITHUB,
-        OPENAI, ANTHROPIC, DEEPSEEK, OPENCODE,
+        OPENAI, ANTHROPIC, DEEPSEEK, OPENCODE, FAL, KIE,
     )
 }
 
@@ -685,6 +725,9 @@ async def stream_chat(
                 raise RuntimeError(
                     f"{provider.name} returned HTTP {r.status_code}: {body[:300]}"
                 )
+            import json
+            yielded = False
+            trailing: list[str] = []
             async for line in r.aiter_lines():
                 if not line:
                     continue
@@ -693,7 +736,6 @@ async def stream_chat(
                     if data == "[DONE]":
                         return
                     try:
-                        import json
                         obj = json.loads(data)
                     except Exception:
                         continue
@@ -703,4 +745,36 @@ async def stream_chat(
                     delta = choices[0].get("delta") or {}
                     chunk = delta.get("content")
                     if chunk:
+                        yielded = True
                         yield chunk
+                elif not yielded and len(trailing) < 200:
+                    # Not SSE. Some gateways (Kie.ai) answer with a plain JSON
+                    # body under HTTP 200 — either an error envelope
+                    # ({"code":401,"msg":...}) or a non-streamed completion.
+                    # Buffer it so we can tell which after the stream ends.
+                    trailing.append(line)
+            if yielded or not trailing:
+                return
+            body = "\n".join(trailing).strip()
+            try:
+                obj = json.loads(body)
+            except Exception:
+                return
+            choices = obj.get("choices") or []
+            if choices:
+                # A full non-streamed completion despite stream=true — use it.
+                content = (choices[0].get("message") or {}).get("content")
+                if content:
+                    yield content
+                return
+            code = obj.get("code")
+            err = obj.get("error")
+            msg = (
+                obj.get("msg")
+                or obj.get("message")
+                or (err.get("message") if isinstance(err, dict) else err)
+            )
+            if (isinstance(code, int) and code >= 400) or msg:
+                # Error wrapped in HTTP 200 — surface it instead of silently
+                # producing an empty reply that looks like a model failure.
+                raise RuntimeError(f"{provider.name} error: {msg or code}")

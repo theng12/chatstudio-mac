@@ -10,6 +10,24 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.17.0] — 2026-07-02
+
+### Added — two more paid providers: fal.ai and Kie.ai (14 total)
+
+- **fal.ai** — their OpenRouter-powered, OpenAI-compatible LLM gateway (`fal.run/openrouter/router/openai/v1`). Bearer auth with a normal FAL key (probe-verified), bills through fal credits → gated as all-paid. **Live-listed** once a key is present; curated fallback covers GPT/Claude/Gemini/Llama/DeepSeek via fal.
+- **Kie.ai** — unified chat API (`kieai.erweima.ai/api/v1`), Bearer auth, Kie-credit billing → all-paid. No `/models` endpoint (404 upstream), so static curated list (GPT-5.6, Claude Fable 5, Claude Opus 4.8, DeepSeek Chat — ids from kie.ai/market/chat; unverified without a key, may need a tweak on first real use).
+
+### Fixed — errors wrapped in HTTP 200 no longer look like empty replies
+
+Kie.ai (and gateways like it) return errors as **HTTP 200** with `{"code":401,"msg":…}` instead of a real error status — which our streaming reader treated as a successful stream containing zero tokens, i.e. a silent empty reply. `stream_chat()` now buffers a non-SSE trailing body and, when the stream produced nothing: a JSON error envelope raises a proper error (verified live: fake Kie key → `502 "Kie.ai error: Unauthorized…"`), and a plain non-streamed completion (a 200 with `choices` despite `stream:true`) is yielded as the reply instead of being dropped. Applies to every provider, not just Kie.
+
+### Notes
+
+- MINOR bump (1.16.0 → 1.17.0) — new providers, no new deps, no schema change. **Just run Update** (or Update & Restart in service mode).
+- Verified: 14 providers registered; fal/kie hidden from `/v1/models` while keyless/untoggled; keyless chat routing returns clean 401; error-in-200 guard end-to-end with a deliberate bad key.
+
+---
+
 ## [1.16.0] — 2026-07-02
 
 ### Added — Paid cloud providers + a three-way model picker (Local · Free · Paid)
