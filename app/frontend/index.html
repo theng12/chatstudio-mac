@@ -237,184 +237,147 @@
   </main>
 
   <!-- ═════════════ MODELS ═════════════ -->
-  <main x-show="tab==='models'" class="page scroll" x-cloak>
+  <main x-show="tab==='models'" class="page scroll models-page" x-cloak>
     <div class="container">
-      <div class="page-head">
-        <h1>Models</h1>
-        <p class="muted">Curated MLX-ready chat models from <code>mlx-community</code> — already quantized, no conversion needed. Gemma sizes are real on-disk totals; others are 4-bit estimates.</p>
-        <!-- ─── Hardware planner: RAM slider + live fit ─── -->
-        <div class="ram-planner" x-cloak>
-          <div class="ram-planner-head">
-            <span class="your-mac-icon">🖥</span>
-            <span x-show="system.unified_memory_gb">
-              Your Mac: <strong x-text="system.chip || 'Apple Silicon'"></strong>
-              · <strong><span x-text="system.unified_memory_gb"></span> GB</strong> unified memory
-            </span>
-            <span x-show="!system.unified_memory_gb" class="muted">
-              Couldn't detect your Mac's RAM — set a budget below to score model fit.
-            </span>
-            <span class="ram-planner-spacer"></span>
-            <span class="ram-budget-pill" :class="{ preview: !ramIsDetected }">
-              Planning for <strong><span x-text="ramGb"></span> GB</strong>
-              <span class="muted small" x-show="!ramIsDetected">· preview</span>
-              <span class="muted small" x-show="ramIsDetected && system.unified_memory_gb">· your Mac</span>
-            </span>
-          </div>
+      <section class="models-hero">
+        <div>
+          <p class="models-eyebrow">Model library</p>
+          <h1>Choose a family. Then choose your fit.</h1>
+          <p>Browse model lineages first, then compare their sizes, quantization, memory needs, and specialties without losing your place.</p>
+        </div>
+        <div class="model-scope-tabs" aria-label="Model source">
+          <button class="model-scope-tab" :class="{active:modelScope==='local'}" @click="setModelScope('local')">
+            <span>Local MLX</span><strong x-text="localModelCount()"></strong>
+          </button>
+          <button class="model-scope-tab" :class="{active:modelScope==='cloud'}" @click="setModelScope('cloud')">
+            <span>Cloud</span><strong x-text="cloudModelCount()"></strong>
+          </button>
+        </div>
+      </section>
 
-          <div class="ram-slider-row">
-            <input class="ram-slider" type="range" min="8" max="512" step="1"
-                   :value="ramGb" @input="setRam($event.target.value)"
-                   aria-label="Unified memory budget in GB">
-            <div class="ram-entry">
-              <input class="ram-num" type="number" min="1" max="1024" step="1"
-                     :value="ramGb" @input="setRam($event.target.value)"
-                     aria-label="Unified memory budget (number)">
-              <span class="muted small">GB</span>
+      <section class="model-commandbar">
+        <input class="model-search" type="search" placeholder="Search families, models, or repositories…" x-model="modelSearch">
+        <div class="model-command-actions">
+          <button class="ghost" x-show="modelScope==='local'" :class="{active:fitFilter==='ok'}" @click="fitFilter=fitFilter==='ok'?'all':'ok'">Fits comfortably</button>
+          <button class="ghost" :class="{active:modelAdvancedOpen}" @click="modelAdvancedOpen=!modelAdvancedOpen">Filters</button>
+        </div>
+        <div class="model-quick-filters" x-show="modelScope==='local'">
+          <button class="model-quick-chip" :class="{active:capFilter==='all'}" @click="capFilter='all'">All roles</button>
+          <button class="model-quick-chip" :class="{active:capFilter==='starter'}" @click="capFilter='starter'">Starter</button>
+          <button class="model-quick-chip" :class="{active:capFilter==='coder'}" @click="capFilter='coder'">Code</button>
+          <button class="model-quick-chip" :class="{active:capFilter==='reasoning'}" @click="capFilter='reasoning'">Reasoning</button>
+          <button class="clear-filter-link" x-show="modelSearch || fitFilter!=='all' || capFilter!=='all' || sortBy!=='default'" @click="clearModelFilters()">Clear filters</button>
+        </div>
+      </section>
+
+      <section class="model-advanced" x-show="modelAdvancedOpen" x-cloak>
+        <div class="advanced-grid">
+          <div class="advanced-block" x-show="modelScope==='local'">
+            <div class="advanced-label">Memory fit at <span x-text="ramGb"></span> GB</div>
+            <div class="seg fit-seg">
+              <button :class="{active:fitFilter==='all'}" @click="fitFilter='all'">All</button>
+              <button :class="{active:fitFilter==='ok'}" @click="fitFilter='ok'">Fits</button>
+              <button :class="{active:fitFilter==='tight'}" @click="fitFilter='tight'">Tight</button>
+              <button :class="{active:fitFilter==='over'}" @click="fitFilter='over'">Over</button>
             </div>
-            <button class="ghost small ram-reset" x-show="system.unified_memory_gb && !ramIsDetected"
-                    @click="resetRamToDetected()" title="Snap back to your Mac's detected RAM">
-              ↩ My Mac (<span x-text="system.unified_memory_gb"></span> GB)
+          </div>
+          <div class="advanced-block" x-show="modelScope==='local'">
+            <div class="advanced-label">Plan for another Mac</div>
+            <div class="compact-device-line"><strong x-text="system.chip || 'Apple Silicon'"></strong> · <span x-text="ramGb"></span> GB</div>
+            <div class="ram-tiers compact-ram-tiers">
+              <template x-for="t in ramTiers" :key="t"><button class="chip ram-tier" :class="{active:ramGb===t}" @click="setRam(t)" x-text="t+' GB'"></button></template>
+            </div>
+          </div>
+          <div class="advanced-block" x-show="modelScope==='local'">
+            <div class="advanced-label">Order variants</div>
+            <select class="model-sort library-sort" x-model="sortBy">
+              <option value="default">Curated order</option><option value="size">Smallest download</option><option value="ram">Least RAM</option><option value="name">Name A–Z</option>
+            </select>
+          </div>
+          <div class="advanced-block" x-show="modelScope==='cloud'">
+            <div class="advanced-label">Cloud availability</div>
+            <p class="muted small">Providers with saved credentials are marked Ready. Add or manage keys in Settings. Paid models only appear after you opt in there.</p>
+            <button class="ghost small" @click="go('settings')">Manage provider keys</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="family-library-heading">
+        <div><h2 x-text="modelScope==='local' ? 'Chat model families' : 'Cloud providers'"></h2><p class="muted" x-text="visibleScopeModelCount()+' options across '+visibleScopeFamilyCount()+(modelScope==='local'?' families':' providers')"></p></div>
+        <p class="muted" x-show="modelScope==='local'">MLX-quantized weights run privately on Apple Silicon.</p>
+        <p class="muted" x-show="modelScope==='cloud'">Hosted models use provider APIs and do not consume local RAM.</p>
+      </div>
+
+      <div class="family-stack" x-show="modelScope==='local'">
+        <template x-for="family in filteredFamilies()" :key="family.id">
+          <section class="family-panel" :class="{'is-open':isModelFamilyOpen(family.id)}">
+            <button class="family-panel-trigger" @click="toggleModelFamily(family.id)">
+              <span class="family-monogram" x-text="familyMonogram(family.label)"></span>
+              <span class="family-panel-copy">
+                <span class="family-title-line"><strong x-text="family.label"></strong><span class="family-cached" x-show="familyCachedCount(family.id)" x-text="familyCachedCount(family.id)+' downloaded'"></span></span>
+                <span class="family-summary" x-text="family.summary"></span>
+                <span class="family-facts"><span x-text="filteredModels(family.id).length+' variants'"></span><span x-text="familyFitCount(family.id)+' fit '+ramGb+' GB'"></span><span>MLX local</span></span>
+              </span>
+              <span class="family-chevron" x-text="isModelFamilyOpen(family.id)?'−':'+'"></span>
             </button>
-          </div>
-
-          <div class="ram-tiers">
-            <template x-for="t in ramTiers" :key="t">
-              <button class="chip ram-tier" :class="{ active: ramGb === t }"
-                      @click="setRam(t)" x-text="t + ' GB'"></button>
-            </template>
-          </div>
-
-          <p class="muted small ram-planner-note">
-            Drag, type, or tap a tier to preview a machine — every fit chip and the picks below re-score instantly.
-          </p>
-        </div>
-
-        <!-- ─── ✨ Best for your RAM — live, per-lane recommendations ─── -->
-        <div class="best-picks" x-show="bestPicks().length" x-cloak>
-          <div class="best-picks-head">
-            <h2>✨ Best for <span x-text="ramGb"></span> GB</h2>
-            <span class="muted small">The highest-quality model in each lane that fits your budget — updates as you move the slider. Click a card to find it below.</span>
-          </div>
-          <div class="best-picks-grid">
-            <template x-for="p in bestPicks()" :key="p.id">
-              <article class="best-pick-card"
-                       @click="modelSearch = p.model.repo; fitFilter = 'all'"
-                       :title="'Find ' + p.model.label + ' in the list below'">
-                <div class="best-pick-lane"><span x-text="p.icon"></span> <span x-text="p.label"></span></div>
-                <div class="best-pick-model" x-text="p.model.label"></div>
-                <div class="best-pick-meta">
-                  <span class="chip" :class="p.model.cache?.state==='cached' ? 'ok' : (p.model.cache?.state==='partial' ? 'warn' : '')"
-                        x-text="p.model.cache?.state==='cached' ? '✓ cached' : (p.model.cache?.state==='partial' ? '⏳ partial' : 'not downloaded')"></span>
-                  <span class="chip" :class="'fit-' + fitFor(p.model.min_unified_memory_gb).state"
-                        x-text="fitFor(p.model.min_unified_memory_gb).label"></span>
-                  <span class="muted small" x-text="p.model.size_gb + ' GB · ≥' + p.model.min_unified_memory_gb + ' GB'"></span>
-                </div>
-              </article>
-            </template>
-          </div>
-        </div>
-      </div>
-
-      <!-- filter / sort toolbar -->
-      <div class="models-toolbar">
-        <input class="model-search" type="text" placeholder="Search models by name or repo…" x-model="modelSearch">
-        <select class="model-sort" x-model="sortBy">
-          <option value="default">Default order</option>
-          <option value="size">Size (smallest)</option>
-          <option value="ram">RAM needed (least)</option>
-          <option value="name">Name A–Z</option>
-        </select>
-      </div>
-      <div class="models-toolbar">
-        <span class="muted small">RAM fit:</span>
-        <div class="seg">
-          <button :class="{active: fitFilter==='all'}" @click="fitFilter='all'">All</button>
-          <button :class="{active: fitFilter==='ok'}" @click="fitFilter='ok'">✅ OK</button>
-          <button :class="{active: fitFilter==='tight'}" @click="fitFilter='tight'">⚠️ Tight</button>
-          <button :class="{active: fitFilter==='over'}" @click="fitFilter='over'">❌ Over</button>
-        </div>
-        <span class="muted small" style="margin-left:12px;">Capability:</span>
-        <div class="seg">
-          <button :class="{active: capFilter==='all'}" @click="capFilter='all'">All</button>
-          <button :class="{active: capFilter==='starter'}" @click="capFilter='starter'">⭐ Starter</button>
-          <button :class="{active: capFilter==='coder'}" @click="capFilter='coder'">💻 Code</button>
-          <button :class="{active: capFilter==='reasoning'}" @click="capFilter='reasoning'">🧠 Reasoning</button>
-        </div>
-      </div>
-      <div class="results-note" x-show="models.length > 0">
-        Showing <strong x-text="visibleModelCount()"></strong> model<span x-show="visibleModelCount() !== 1">s</span>
-        across <strong x-text="visibleFamilyCount()"></strong> famil<span x-show="visibleFamilyCount() !== 1">ies</span>
-      </div>
-
-      <template x-for="family in filteredFamilies()" :key="family.id">
-        <section class="family">
-          <div class="family-head">
-            <h2><span x-text="family.label"></span> <span class="fam-count" x-text="filteredModels(family.id).length + ' model' + (filteredModels(family.id).length === 1 ? '' : 's')"></span></h2>
-            <p class="muted" x-text="family.summary"></p>
-          </div>
-          <details class="how">
-            <summary>How to use this family</summary>
-            <p x-text="family.how_to_use"></p>
-            <p class="muted small" x-show="family.context_note" x-text="family.context_note"></p>
-          </details>
-
-          <div class="model-list">
-            <template x-for="m in filteredModels(family.id)" :key="m.repo">
-              <article class="model-card" :class="{cached: m.cache.state === 'cached'}">
-                <div class="model-meta">
-                  <h3>
-                    <span x-text="m.label"></span>
-                    <span class="chip" :class="m.cache.state==='cached' ? 'ok' : (m.cache.state==='partial' ? 'warn' : '')"
-                          x-text="m.cache.state==='cached' ? '✓ cached' : (m.cache.state==='partial' ? '⏳ partial' : 'not downloaded')"></span>
-                    <span class="chip starter" x-show="m.is_starter">starter</span>
-                    <span class="chip coder" x-show="m.is_coder">code</span>
-                    <span class="chip reasoning" x-show="m.is_reasoning">reasoning</span>
-                    <span class="chip" x-show="m.min_unified_memory_gb" :class="'fit-' + fitFor(m.min_unified_memory_gb).state" :title="fitFor(m.min_unified_memory_gb).hint" x-text="fitFor(m.min_unified_memory_gb).label"></span>
-                  </h3>
-                  <p class="repo"><code x-text="m.repo"></code></p>
-                  <p class="size-line">
-                    <span class="size-big" x-text="m.size_gb + ' GB'"></span>
-                    <span class="muted" x-text="m.size_gb_approximate ? 'approx. download' : 'download'"></span>
-                    · <span class="muted" x-text="'≥' + m.min_unified_memory_gb + ' GB RAM'"></span>
-                    · <span class="muted" x-text="m.params_b + 'B · ' + m.quant"></span>
-                  </p>
-                  <p class="hw muted" x-text="m.recommended_hardware"></p>
-                  <p class="best-for" x-text="m.best_for"></p>
-                </div>
-                <div class="model-actions">
-                  <template x-if="m.cache.state === 'cached'">
-                    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
-                      <span class="ok-text">✓ cached</span>
-                      <button class="primary small" @click="loadFromModels(m.repo)">💬 Chat with this</button>
-                      <button class="ghost small" :class="{active: gen.defaultModel===m.repo}"
-                              @click="setDefaultModel(gen.defaultModel===m.repo ? '' : m.repo)">
-                        <span x-text="gen.defaultModel===m.repo ? '★ Default' : '☆ Set default'"></span>
-                      </button>
+            <div class="family-panel-body" x-show="isModelFamilyOpen(family.id)" x-cloak>
+              <div class="family-guidance"><span>Choose this when</span><p><span x-text="family.how_to_use"></span> <span x-show="family.context_note" x-text="family.context_note"></span></p></div>
+              <div class="variant-table-head"><span>Model variant</span><span>Parameters</span><span>Download</span><span>Memory</span><span></span></div>
+              <div class="variant-list">
+                <template x-for="m in filteredModels(family.id)" :key="m.repo">
+                  <article class="variant-row" :class="{cached:m.cache.state==='cached',partial:m.cache.state==='partial'}">
+                    <div class="variant-identity">
+                      <div class="variant-title-line"><h3 x-text="m.label"></h3><span class="variant-role" x-text="modelRole(m)"></span></div>
+                      <div class="variant-capabilities"><span x-text="m.cache.state==='cached'?'Downloaded':(m.cache.state==='partial'?'Partial':'Available')"></span><span>Apple MLX</span></div>
                     </div>
-                  </template>
-                  <template x-if="m.cache.state !== 'cached' && !m.active_download">
-                    <button class="primary" @click="startDownload(m.repo)">⬇ Download</button>
-                  </template>
-                  <template x-if="m.active_download">
-                    <div class="dl-inline">
-                      <div class="bar"><div class="bar-fill" :style="`width:${m.active_download.percent || 0}%`"></div></div>
-                      <small class="dl-stats" x-show="m.active_download.state === 'running'">
-                        <span x-text="formatBytes(m.active_download.bytes_observed) + ' / ' + formatBytes(m.active_download.bytes_total)"></span>
-                        <span x-text="(m.active_download.percent || 0).toFixed(1) + '%'"></span>
-                        <span x-show="m.active_download.speed_bps > 0" x-text="'· ' + formatBytes(m.active_download.speed_bps) + '/s'"></span>
-                      </small>
-                      <small class="dl-stats" x-show="m.active_download.state === 'queued'" x-cloak>
-                        <span class="faint">Waiting…</span>
-                      </small>
-                      <button class="link danger" @click="cancelDownload(m.active_download.id)">cancel</button>
+                    <div class="variant-spec" data-label="Parameters"><strong x-text="m.params_b+'B · '+m.quant"></strong><small x-text="modelRole(m)+' tuned'"></small></div>
+                    <div class="variant-spec" data-label="Download"><strong x-text="m.size_gb+' GB'"></strong><small x-text="m.size_gb_approximate?'estimated':'on disk'"></small></div>
+                    <div class="variant-spec" data-label="Memory"><strong x-text="'≥'+m.min_unified_memory_gb+' GB'"></strong><small class="fit-dot" :class="'fit-'+fitFor(m.min_unified_memory_gb).state" :title="fitFor(m.min_unified_memory_gb).hint" x-text="fitFor(m.min_unified_memory_gb).label"></small></div>
+                    <div class="variant-action">
+                      <button class="primary small" x-show="m.cache.state==='cached'" @click="loadFromModels(m.repo)">Chat</button>
+                      <button class="primary small" x-show="m.cache.state!=='cached' && !m.active_download" @click="startDownload(m.repo)">Download</button>
+                      <div class="dl-inline" x-show="m.active_download" x-cloak><div class="bar"><div class="bar-fill" :style="`width:${m.active_download?.percent||0}%`"></div></div><small x-text="m.active_download?.state==='queued'?'Waiting':((m.active_download?.percent||0).toFixed(0)+'%')"></small><button class="link danger" @click="cancelDownload(m.active_download.id)">cancel</button></div>
                     </div>
-                  </template>
-                </div>
-              </article>
-            </template>
-          </div>
-        </section>
-      </template>
+                    <button class="variant-details-toggle" @click="toggleModelExpanded(m.repo)" x-text="isModelExpanded(m.repo)?'Hide details':'Details'"></button>
+                    <div class="variant-details" x-show="isModelExpanded(m.repo)" x-cloak>
+                      <p class="best-for" x-text="m.best_for"></p><p class="hw muted" x-text="m.recommended_hardware"></p><p class="variant-repo"><code x-text="m.repo"></code></p>
+                      <button class="ghost small" x-show="m.cache.state==='cached'" :class="{active:gen.defaultModel===m.repo}" @click="setDefaultModel(gen.defaultModel===m.repo?'':m.repo)" x-text="gen.defaultModel===m.repo?'★ Default model':'☆ Set as default'"></button>
+                    </div>
+                  </article>
+                </template>
+              </div>
+            </div>
+          </section>
+        </template>
+      </div>
+
+      <div class="family-stack" x-show="modelScope==='cloud'" x-cloak>
+        <template x-for="p in visibleCloudProviders()" :key="p.key">
+          <section class="family-panel tone-cloud" :class="{'is-open':isModelFamilyOpen('cloud:'+p.key)}">
+            <button class="family-panel-trigger" @click="toggleModelFamily('cloud:'+p.key)">
+              <span class="family-monogram" x-text="familyMonogram(p.name)"></span>
+              <span class="family-panel-copy"><span class="family-title-line"><strong x-text="p.name"></strong><span class="family-cached" x-text="p.key_set?'Ready':'Key needed'"></span></span><span class="family-summary" x-text="p.key_set?'Connected and ready to chat.':'Add a provider key in Settings before chatting.'"></span><span class="family-facts"><span x-text="cloudModelsFor(p).length+' models'"></span><span x-text="p.has_paid&&p.paid_enabled?'Free + paid':'Free catalog'"></span><span>No local download</span></span></span>
+              <span class="family-chevron" x-text="isModelFamilyOpen('cloud:'+p.key)?'−':'+'"></span>
+            </button>
+            <div class="family-panel-body" x-show="isModelFamilyOpen('cloud:'+p.key)" x-cloak>
+              <div class="family-guidance"><span>Provider</span><p>Models run remotely through <span x-text="p.name"></span>. Your prompts are sent to that provider under its terms and limits.</p></div>
+              <div class="variant-table-head is-cloud"><span>Hosted model</span><span>Best for</span><span>Access</span><span></span></div>
+              <div class="variant-list"><template x-for="m in cloudModelsFor(p)" :key="m.repo"><article class="variant-row cloud-row"><div class="variant-identity"><div class="variant-title-line"><h3 x-text="m.label"></h3><span class="variant-role" x-text="m.free?'Free':'Paid'"></span></div><div class="variant-capabilities"><span x-text="m.live?'Live catalog':'Curated'"></span><span>Cloud API</span></div></div><div class="variant-spec" data-label="Best for"><strong x-text="m.notes||'General chat'"></strong><small x-text="m.id"></small></div><div class="variant-spec" data-label="Access"><strong x-text="p.key_set?'Ready':'Key needed'"></strong><small>No local files</small></div><div class="variant-action"><button class="primary small" @click="useCloudModel(m,p)" x-text="p.key_set?'Chat':'Add key'"></button></div></article></template></div>
+            </div>
+          </section>
+        </template>
+      </div>
+
+      <section class="library-empty" x-show="visibleScopeModelCount()===0"><div class="empty-orbit">○</div><h3>No models match these filters</h3><p class="muted">Clear the search and filters to bring every family back.</p><button class="ghost" @click="clearModelFilters()">Clear filters</button></section>
+
+      <details class="hub-discovery" x-show="modelScope==='local'">
+        <summary><span>Discover more on Hugging Face</span><small>Advanced · MLX-compatible repositories beyond the curated catalog</small></summary>
+        <div class="hub-discovery-body">
+          <div class="hub-search-row"><input class="model-search" type="search" placeholder="Search Hugging Face MLX models…" x-model="hubQuery" @keydown.enter="searchHub()"><button class="primary" @click="searchHub()" :disabled="hubLoading" x-text="hubLoading?'Searching…':'Search Hub'"></button></div>
+          <p class="test-result err" x-show="hubError" x-text="hubError"></p>
+          <div class="hub-results" x-show="hubResults.length"><template x-for="r in hubResults" :key="r.repo"><article class="hub-result"><div><strong x-text="r.repo"></strong><p class="muted small"><span x-text="formatNumber(r.downloads)+' downloads'"></span> · <span x-text="formatNumber(r.likes)+' likes'"></span><span x-show="r.in_catalog"> · already curated above</span></p></div><span class="chip ok" x-show="hubIsCached(r)">Downloaded</span><button class="primary small" x-show="!hubIsCached(r) && !hubJob(r.repo)" @click="startDownload(r.repo)">Download</button><div class="dl-inline" x-show="hubJob(r.repo)" x-cloak><div class="bar"><div class="bar-fill" :style="`width:${hubJob(r.repo)?.percent||0}%`"></div></div><small x-text="hubJob(r.repo)?.state==='queued'?'Waiting':((hubJob(r.repo)?.percent||0).toFixed(0)+'%')"></small></div></article></template></div>
+        </div>
+      </details>
     </div>
   </main>
 

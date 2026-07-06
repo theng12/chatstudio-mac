@@ -21,6 +21,17 @@ function studio() {
     fitFilter: "all",
     capFilter: "all",
     sortBy: "default",
+    modelScope: "local",
+    modelAdvancedOpen: false,
+    openModelFamilies: new Set(),
+    expandedModelRepos: new Set(),
+
+    // Hugging Face discovery stays separate from the curated family library.
+    // It uses the existing MLX-only Hub endpoint and the same download queue.
+    hubQuery: "",
+    hubResults: [],
+    hubLoading: false,
+    hubError: "",
 
     // ── RAM slider (Models tab hardware planner) ──
     // Effective unified-memory budget used to score every model's fit chip
@@ -96,6 +107,7 @@ function studio() {
       await this.refreshDiagnostics();
       await this.refreshChatModels();
       await this.refreshProviders();
+      this.initModelLibrary();
       await this.refreshConnectivity();
       this.pickDefaultModel();
       this.pollDownloads();
@@ -118,7 +130,7 @@ function studio() {
     go(tab) {
       this.tab = tab;
       if (tab === "chat") { this.refreshDiagnostics(); this.refreshChatModels(); }
-      if (tab === "models") this.refreshCatalog();
+      if (tab === "models") { this.refreshCatalog(); this.refreshProviders(); }
       if (tab === "api") this.refreshConnectivity();
       if (tab === "settings") { this.refreshSettings(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
     },
@@ -403,6 +415,107 @@ function studio() {
         return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
       });
     },
+    localModelCount() { return this.models.length; },
+    cloudModelCount() {
+      return this.providers.reduce((total, p) => total + this.cloudModelsFor(p, false).length, 0);
+    },
+    cloudModelsFor(provider, applySearch = true) {
+      const visible = (provider.models || []).filter(m => m.free || provider.paid_enabled);
+      const live = (this.liveModels[provider.key] || []).map(m => ({
+        id: m.id,
+        label: m.id,
+        notes: "Live provider catalog",
+        free: true,
+        live: true,
+        repo: m.repo,
+      }));
+      const seen = new Set();
+      return [...visible, ...live].filter(m => {
+        if (!m.repo || seen.has(m.repo)) return false;
+        seen.add(m.repo);
+        if (!applySearch || !this.modelSearch.trim()) return true;
+        const q = this.modelSearch.trim().toLowerCase();
+        return [m.label, m.id, m.notes, provider.name].some(v => String(v || "").toLowerCase().includes(q));
+      });
+    },
+    visibleCloudProviders() {
+      return this.providers.filter(p => this.cloudModelsFor(p).length > 0);
+    },
+    visibleScopeModelCount() {
+      if (this.modelScope === "cloud") {
+        return this.visibleCloudProviders().reduce((total, p) => total + this.cloudModelsFor(p).length, 0);
+      }
+      return this.visibleModelCount();
+    },
+    visibleScopeFamilyCount() {
+      return this.modelScope === "cloud" ? this.visibleCloudProviders().length : this.visibleFamilyCount();
+    },
+    setModelScope(scope) {
+      if (!['local', 'cloud'].includes(scope) || scope === this.modelScope) return;
+      this.modelScope = scope;
+      this.modelSearch = "";
+      this.fitFilter = "all";
+      this.capFilter = "all";
+      this.openModelFamilies = new Set();
+      this.openBestModelFamily();
+    },
+    initModelLibrary() {
+      if (!this.openModelFamilies.size) this.openBestModelFamily();
+      // Remove preferences from older experiments that could silently hide
+      // most of the catalog. The family library always opens unfiltered.
+      try {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith("chatstudio.modelFilter")) localStorage.removeItem(key);
+        }
+      } catch {}
+    },
+    openBestModelFamily() {
+      if (this.modelScope === "cloud") {
+        const ready = this.providers.find(p => p.key_set && this.cloudModelsFor(p).length);
+        const first = ready || this.visibleCloudProviders()[0];
+        this.openModelFamilies = new Set(first ? [`cloud:${first.key}`] : []);
+        return;
+      }
+      const cached = this.models.find(m => m.cache?.state === "cached");
+      const starter = this.models.find(m => m.is_starter && this.fitFor(m.min_unified_memory_gb).state !== "risky");
+      const first = cached || starter || this.models[0];
+      this.openModelFamilies = new Set(first ? [first.family] : []);
+    },
+    isModelFamilyOpen(id) {
+      return this.openModelFamilies.has(id) || !!this.modelSearch.trim();
+    },
+    toggleModelFamily(id) {
+      const next = new Set(this.openModelFamilies);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      this.openModelFamilies = next;
+    },
+    isModelExpanded(repo) { return this.expandedModelRepos.has(repo); },
+    toggleModelExpanded(repo) {
+      const next = new Set(this.expandedModelRepos);
+      if (next.has(repo)) next.delete(repo); else next.add(repo);
+      this.expandedModelRepos = next;
+    },
+    familyMonogram(label) {
+      return String(label || "AI").split(/\s+/).map(x => x[0]).join("").slice(0, 2).toUpperCase();
+    },
+    familyCachedCount(familyId) {
+      return (this.modelsByFamily[familyId] || []).filter(m => m.cache?.state === "cached").length;
+    },
+    familyFitCount(familyId) {
+      return (this.modelsByFamily[familyId] || []).filter(m => this.fitFor(m.min_unified_memory_gb).state !== "risky").length;
+    },
+    modelRole(m) {
+      if (m.is_coder) return "Code";
+      if (m.is_reasoning) return "Reasoning";
+      if (m.is_starter) return "Starter";
+      return "General";
+    },
+    clearModelFilters() {
+      this.modelSearch = "";
+      this.fitFilter = "all";
+      this.capFilter = "all";
+      this.sortBy = "default";
+    },
     filteredModels(familyId) {
       const ms = (this.modelsByFamily[familyId] || []).filter(m => this._passesFilter(m));
       return this._sorted(ms);
@@ -421,7 +534,9 @@ function studio() {
         const q = this.modelSearch.toLowerCase();
         const label = (m.label || "").toLowerCase();
         const repo = (m.repo || "").toLowerCase();
-        if (!label.includes(q) && !repo.includes(q)) return false;
+        const family = this.families[m.family] || {};
+        const familyText = `${family.label || ""} ${family.summary || ""}`.toLowerCase();
+        if (!label.includes(q) && !repo.includes(q) && !familyText.includes(q)) return false;
       }
       if (this.fitFilter !== "all") {
         // Scored live against the RAM slider. The "over" button maps to the
@@ -443,6 +558,39 @@ function studio() {
       else if (this.sortBy === "ram") arr.sort((a, b) => a.min_unified_memory_gb - b.min_unified_memory_gb);
       else if (this.sortBy === "name") arr.sort((a, b) => (a.label || "").localeCompare(b.label || ""));
       return arr;
+    },
+
+    async searchHub() {
+      this.hubLoading = true;
+      this.hubError = "";
+      try {
+        const q = encodeURIComponent(this.hubQuery.trim());
+        const r = await fetch(`${this.apiBase}/api/hub/search?q=${q}&limit=40`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Hub search failed");
+        this.hubResults = d.models || [];
+      } catch (e) {
+        this.hubResults = [];
+        this.hubError = String(e.message || e);
+      } finally { this.hubLoading = false; }
+    },
+    hubJob(repo) {
+      return this.jobs.find(j => j.repo === repo && ["queued", "running", "cancelling"].includes(j.state));
+    },
+    hubIsCached(result) {
+      if (result.cache_state === "cached") return true;
+      return this.jobs.some(j => j.repo === result.repo && j.state === "done");
+    },
+    async useCloudModel(model, provider) {
+      if (!provider.key_set) {
+        this.go("settings");
+        this.showToast(`Add a ${provider.name} API key to use this model`);
+        return;
+      }
+      this.modelTab = "cloud";
+      this.currentRepo = model.repo;
+      this.selectedRepo = model.repo;
+      this.go("chat");
     },
 
     // ════════════ model loading ════════════
@@ -480,6 +628,7 @@ function studio() {
     },
     loadFromModels(repo) {
       // "Chat with this" button on the Models tab
+      this.modelTab = "local";
       this.go("chat");
       this.selectedRepo = repo;
       if (repo !== this.currentRepo) this.loadModel(repo);
@@ -1034,6 +1183,9 @@ console.log(data.choices[0].message.content);`;
       let v = b;
       while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
       return v.toFixed(i === 0 ? 0 : 1) + " " + units[i];
+    },
+    formatNumber(n) {
+      return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(Number(n) || 0);
     },
     formatDuration(s) {
       if (!s || s <= 0 || !isFinite(s)) return "—";
