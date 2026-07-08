@@ -50,6 +50,8 @@ function studio() {
 
     // ── cloud providers ──
     providers: [],
+    providerSearch: "",
+    focusedProvider: "",
     providerKeyInputs: {},
     providerSaving: null,
     providerTests: {},
@@ -991,6 +993,26 @@ function studio() {
         const d = await (await fetch(`${this.apiBase}/api/providers`)).json();
         this.providers = d.providers || [];
       } catch (e) { this.providers = []; }
+    },
+    providerMatches(p) {
+      const q = (this.providerSearch || "").trim().toLowerCase();
+      if (!q) return true;
+      const modelText = (p.models || []).map(m => `${m.label || ""} ${m.repo || ""} ${m.notes || ""}`).join(" ");
+      return [p.name, p.key, p.base_url, modelText].some(v => String(v || "").toLowerCase().includes(q));
+    },
+    visibleProviders() {
+      return (this.providers || []).filter(p => this.providerMatches(p));
+    },
+    focusProvider(name) {
+      this.focusedProvider = name;
+      setTimeout(() => {
+        const row = Array.from(document.querySelectorAll(".provider-row"))
+          .find(el => el.dataset.providerKey === name);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        const input = row.querySelector("input[type='password']");
+        if (input) setTimeout(() => input.focus({ preventScroll: true }), 360);
+      }, 30);
     },
     async saveProviderKey(name) {
       const key = (this.providerKeyInputs[name] || "").trim();

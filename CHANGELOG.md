@@ -10,6 +10,23 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.18.4] — 2026-07-08
+
+### Improved — Provider API keys are easier to find and focus
+
+The Cloud providers settings were still a long vertical list, so adding or testing a key meant hunting through every provider row. This was especially rough now that Chat Studio ships with 20 hosted providers.
+
+- Added a compact provider card picker above the detailed key editors.
+- Added provider/model search so the list can be filtered before editing.
+- Clicking a provider card now scrolls its full editor row into view, highlights it, and focuses the API-key field.
+- Kept the existing Save, Test, Get key, paid-model toggle, and live-model controls unchanged.
+
+**Verified:** frontend syntax check, backend import compile, HTML parser smoke check, and live Settings smoke test against the running service at desktop and mobile widths. No launcher scripts were changed; `start.js` still uses the required `input.event[1]` URL capture/local.set pattern.
+
+### Notes
+
+- PATCH bump (1.18.3 → 1.18.4) — frontend-only Settings UX polish. **Just run Update** (or Update & Restart in service mode).
+
 ## [1.18.3] — 2026-07-08
 
 ### Fixed — Start now refuses to compete with startup service mode
