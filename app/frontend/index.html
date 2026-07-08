@@ -504,10 +504,35 @@
   <!-- ═════════════ SETTINGS ═════════════ -->
   <main x-show="tab==='settings'" class="page scroll" x-cloak>
     <div class="container">
-      <div class="page-head"><h1>Settings</h1></div>
+      <div class="page-head settings-head">
+        <div>
+          <h1>Settings</h1>
+          <p class="muted">Configure fallback behavior, model defaults, tokens, providers, and service health.</p>
+        </div>
+        <div class="settings-summary" aria-label="Settings status">
+          <span class="summary-pill" :class="settings.uninterrupted_mode ? 'ok' : ''">
+            <strong x-text="settings.uninterrupted_mode ? 'Fallback on' : 'Fallback off'"></strong>
+            <small x-text="(settings.request_timeout || 60) + 's timeout'"></small>
+          </span>
+          <span class="summary-pill" :class="providers.filter(p => p.key_set).length ? 'ok' : ''">
+            <strong x-text="providers.filter(p => p.key_set).length + ' providers'"></strong>
+            <small>with keys</small>
+          </span>
+          <span class="summary-pill" :class="diag.available ? 'ok' : 'warn'">
+            <strong x-text="diag.available ? 'MLX ready' : 'MLX check'"></strong>
+            <small x-text="diag.loaded_model ? 'model loaded' : 'idle'"></small>
+          </span>
+        </div>
+      </div>
+
+      <div class="settings-section-title">
+        <span>Chat Behavior</span>
+        <small>Routing, defaults, and generation controls</small>
+      </div>
 
       <!-- uninterrupted mode -->
-      <section class="card">
+      <div class="settings-grid">
+      <section class="card settings-card">
         <h3>Uninterrupted Mode</h3>
         <p class="card-sub">Keep chatting even if a provider fails. When on, if your selected model errors (offline, rate-limited, overloaded, timed out, or no key), Chat Studio automatically retries the next provider in priority order — local MLX + your configured cloud providers.</p>
         <label class="card-row" style="gap:8px; cursor:pointer; align-items:center;">
@@ -522,6 +547,53 @@
           <p class="hint">If a provider sends no token within this time, fall back to the next one.</p>
         </div>
         <p class="hint">Answers show <em>via &lt;provider&gt;</em> (and “fell back” when a backup was used).</p>
+      </section>
+
+      <!-- default model -->
+      <section class="card settings-card">
+        <h3>Default model</h3>
+        <p class="card-sub">Auto-loaded on startup. Pick any downloaded model below.</p>
+        <div class="card-row">
+          <select x-model="gen.defaultModel" @change="saveGen()" style="flex:1; min-width:200px;">
+            <option value="">— None (pick manually) —</option>
+            <template x-for="m in cachedModelRepos()" :key="m.repo">
+              <option :value="m.repo" x-text="m.label"></option>
+            </template>
+          </select>
+          <button class="ghost small" @click="setDefaultModel('')" x-show="gen.defaultModel">Clear</button>
+        </div>
+        <p class="hint" x-show="gen.defaultModel">
+          <span class="chip ok" style="font-size:11px;">✓ Default: <span x-text="gen.defaultModel.split('/').pop()"></span></span>
+          — will load automatically on next server start
+        </p>
+        <p class="hint" x-show="!gen.defaultModel">No default — the Chat tab will start with the first model in the list.</p>
+      </section>
+      </div>
+
+      <!-- generation defaults -->
+      <section class="card">
+        <h3>Chat defaults</h3>
+        <p class="card-sub">Applied to every message in the Chat tab. Saved in this browser.</p>
+        <div class="field">
+          <label>System prompt <span class="faint">optional</span></label>
+          <textarea x-model="gen.system" @change="saveGen()" placeholder="e.g. You are a concise, friendly assistant. Use Markdown."></textarea>
+          <p class="hint">Sent as a system instruction. On models without a system role (Gemma), it’s merged into your first message automatically.</p>
+        </div>
+        <div class="card-row" style="gap:24px;">
+          <div class="field" style="flex:1; min-width:180px;">
+            <label>Temperature <span class="val" x-text="gen.temperature.toFixed(2)"></span></label>
+            <input type="range" min="0" max="1.5" step="0.05" x-model.number="gen.temperature" @change="saveGen()">
+          </div>
+          <div class="field" style="flex:1; min-width:180px;">
+            <label>Max tokens <span class="val" x-text="gen.maxTokens"></span></label>
+            <input type="range" min="128" max="4096" step="128" x-model.number="gen.maxTokens" @change="saveGen()">
+          </div>
+          <div class="field" style="flex:1; min-width:180px;">
+            <label>Top-p <span class="val" x-text="gen.topP.toFixed(2)"></span></label>
+            <input type="range" min="0.1" max="1" step="0.05" x-model.number="gen.topP" @change="saveGen()">
+          </div>
+        </div>
+        <button class="ghost small" @click="resetGen()">Reset to defaults</button>
       </section>
 
       <!-- fallback providers + health -->
@@ -551,51 +623,10 @@
         </template>
       </section>
 
-      <!-- default model -->
-      <section class="card">
-        <h3>Default model</h3>
-        <p class="card-sub">Auto-loaded on startup. Pick any downloaded model below.</p>
-        <div class="card-row">
-          <select x-model="gen.defaultModel" @change="saveGen()" style="flex:1; min-width:200px;">
-            <option value="">— None (pick manually) —</option>
-            <template x-for="m in cachedModelRepos()" :key="m.repo">
-              <option :value="m.repo" x-text="m.label"></option>
-            </template>
-          </select>
-          <button class="ghost small" @click="setDefaultModel('')" x-show="gen.defaultModel">Clear</button>
-        </div>
-        <p class="hint" x-show="gen.defaultModel">
-          <span class="chip ok" style="font-size:11px;">✓ Default: <span x-text="gen.defaultModel.split('/').pop()"></span></span>
-          — will load automatically on next server start
-        </p>
-        <p class="hint" x-show="!gen.defaultModel">No default — the Chat tab will start with the first model in the list.</p>
-      </section>
-
-      <!-- generation defaults -->
-      <section class="card">
-        <h3>Chat defaults</h3>
-        <p class="card-sub">Applied to every message in the Chat tab. Saved in this browser.</p>
-        <div class="field">
-          <label>System prompt <span class="faint">optional</span></label>
-          <textarea x-model="gen.system" @change="saveGen()" placeholder="e.g. You are a concise, friendly assistant. Use Markdown."></textarea>
-          <p class="hint">Sent as a system instruction. On models without a system role (Gemma), it’s merged into your first message automatically.</p>
-        </div>
-        <div class="card-row" style="gap:24px;">
-          <div class="field" style="flex:1; min-width:180px;">
-            <label>Temperature <span class="val" x-text="gen.temperature.toFixed(2)"></span></label>
-            <input type="range" min="0" max="1.5" step="0.05" x-model.number="gen.temperature" @change="saveGen()">
-          </div>
-          <div class="field" style="flex:1; min-width:180px;">
-            <label>Max tokens <span class="val" x-text="gen.maxTokens"></span></label>
-            <input type="range" min="128" max="4096" step="128" x-model.number="gen.maxTokens" @change="saveGen()">
-          </div>
-          <div class="field" style="flex:1; min-width:180px;">
-            <label>Top-p <span class="val" x-text="gen.topP.toFixed(2)"></span></label>
-            <input type="range" min="0.1" max="1" step="0.05" x-model.number="gen.topP" @change="saveGen()">
-          </div>
-        </div>
-        <button class="ghost small" @click="resetGen()">Reset to defaults</button>
-      </section>
+      <div class="settings-section-title">
+        <span>Access</span>
+        <small>Download token and hosted model providers</small>
+      </div>
 
       <!-- HF token -->
       <section class="card">
@@ -615,16 +646,23 @@
       <section class="card" x-show="providers.length > 0" x-cloak>
         <h3>Cloud providers</h3>
         <p class="card-sub">Route chat to hosted models. Free models show by default; flip <strong>Enable paid models</strong> to also use a provider's paid flagships (💲). Pick a cloud model from the Chat tab's dropdown (☁). Keys are stored locally in <code>settings.json</code> and never logged.</p>
+        <div class="provider-toolbar">
+          <span class="chip ok" x-show="providers.filter(p => p.key_set).length" x-cloak x-text="providers.filter(p => p.key_set).length + ' connected'"></span>
+          <span class="chip warn" x-show="providers.filter(p => !p.key_set).length" x-cloak x-text="providers.filter(p => !p.key_set).length + ' need keys'"></span>
+          <span class="muted small" x-text="providers.reduce((n,p)=>n+p.models.length,0) + ' curated models'"></span>
+        </div>
         <template x-for="p in providers" :key="p.key">
-          <div class="provider-row" style="border-top:1px solid var(--border); padding:14px 0;">
-            <div class="card-row" style="margin-bottom:6px;">
-              <strong x-text="p.name"></strong>
-              <span class="muted small" x-text="'· ' + p.models.length + ' models'"></span>
+          <div class="provider-row">
+            <div class="provider-row-head">
+              <div>
+                <strong x-text="p.name"></strong>
+                <p class="muted small" x-text="p.models.length + ' curated models' + (p.has_paid ? ' · paid catalog available' : '')"></p>
+              </div>
               <span class="spacer" style="flex:1"></span>
               <span class="chip ok" x-show="p.key_set" x-cloak>saved: <span x-text="p.key_masked"></span></span>
               <span class="chip warn" x-show="!p.key_set" x-cloak>no key</span>
             </div>
-            <div class="card-row" style="gap:8px;">
+            <div class="provider-key-row">
               <input type="password" style="flex:1; min-width:220px;"
                      :value="providerKeyInputs[p.key] || ''"
                      @input="providerKeyInputs[p.key] = $event.target.value"
@@ -634,7 +672,7 @@
                 <span x-show="providerSaving === p.key" x-cloak>…</span>
               </button>
               <button class="ghost" @click="testProvider(p.key)">Test</button>
-              <a class="ghost" :href="p.docs_url" target="_blank" rel="noopener" style="text-decoration:none; padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:12px;">Get key ↗</a>
+              <a class="provider-doc-link" :href="p.docs_url" target="_blank" rel="noopener">Get key ↗</a>
             </div>
             <p class="test-result" :class="(providerTests[p.key] || {}).ok ? 'ok' : 'err'"
                x-show="(providerTests[p.key] || {}).msg" x-cloak
@@ -648,7 +686,7 @@
                 <span class="muted small">— uses your paid <span x-text="p.name"></span> credits</span>
               </span>
             </label>
-            <div class="card-row" style="gap:8px; margin-top:8px; align-items:center;">
+            <div class="provider-actions">
               <button class="ghost small" @click="loadLiveModels(p.key)" :disabled="liveLoading===p.key">
                 <span x-show="liveLoading!==p.key">↻ Load all models (live)</span>
                 <span x-show="liveLoading===p.key" x-cloak>Loading…</span>
@@ -675,6 +713,11 @@
         </template>
       </section>
 
+      <div class="settings-section-title">
+        <span>System</span>
+        <small>Engine diagnostics and server details</small>
+      </div>
+
       <!-- engine diagnostics -->
       <section class="card">
         <h3>Engine</h3>
@@ -699,7 +742,7 @@
           <span x-show="depInstall.result && !depInstall.result.ok" class="chip warn" style="margin-left:8px;" x-cloak>failed</span>
         </div>
         <div x-show="depInstall.result && depInstall.result.stderr" x-cloak style="margin-top:8px;">
-          <pre class="dep-log" x-text="(depInstall.result.stderr || '') + (depInstall.result.stdout || '')"></pre>
+          <pre class="dep-log" x-text="((depInstall.result || {}).stderr || '') + ((depInstall.result || {}).stdout || '')"></pre>
         </div>
       </section>
 

@@ -10,6 +10,29 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.18.2] — 2026-07-08
+
+### Fixed — Settings now has a clearer setup path and no hidden diagnostics crash
+
+After pulling the latest Settings refresh, the page worked but every control had the same visual weight: fallback behavior, default model, chat defaults, provider keys, engine diagnostics, and server details all appeared as one long stack. That made the first-time setup path hard to scan, especially now that Chat Studio has 20 cloud providers.
+
+- Added a compact Settings status header for fallback state, connected provider count, and MLX readiness.
+- Grouped the page into **Chat Behavior**, **Access**, and **System** sections so related controls sit together.
+- Reworked cloud provider rows with a connected/needs-key summary, clearer per-provider metadata, and consistent action rows for Save/Test/Get key/Load live models.
+- Fixed a hidden Alpine expression in the Engine diagnostics block that could throw `Cannot read properties of null (reading 'stderr')` before dependency-repair output existed.
+
+**Verified:** `node --check app/frontend/app.js`, `python3 -m py_compile` for backend settings/provider routes, HTML parser smoke check, live `curl` against the running service's no-cache static assets, and a headless Chrome pass on the live Settings tab at desktop and mobile widths. The live backend still reports `1.18.1.b8b7def` until the running service is restarted, but the static UI updates are served immediately.
+
+### Checked and left unchanged
+
+- No launcher scripts were changed. `start.js` already follows the required capture/local.set pattern, using `input.event[1]` from the Uvicorn URL capture.
+- Provider save/test/live-model APIs were left untouched; this is a frontend organization and guard fix only.
+- The existing inline sliders and controls were kept to avoid changing saved settings behavior.
+
+### Notes
+
+- PATCH bump (1.18.1 → 1.18.2) — frontend-only UI/UX polish plus one Alpine null guard. **Just run Update** (or Update & Restart in service mode).
+
 ## [1.18.1] — 2026-07-02
 
 ### Fixed — "502 (No body)" on cloud completions is now an informative error, and logged
