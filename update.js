@@ -1,10 +1,18 @@
-// This is a freshly-created project (not cloned from a git remote), so there
-// is no upstream "git pull" step — see VoiceStudio's update.js for the
-// git-tracked-project version of this pattern. Update here just means
-// reinstalling deps (in case requirements.txt changed) and restarting the
-// startup service if one is installed, so it picks up the new backend code.
+// Update = pull the latest code from GitHub (when this copy is a git clone,
+// e.g. installed via Pinokio's "Download from URL"), converge deps onto the
+// committed lockfile, and restart the startup service if one is installed so
+// the running server picks up the new code.
 module.exports = {
   run: [
+    {
+      // No-op for a non-git copy; on git clones this brings launcher scripts,
+      // backend code, AND the dep lockfile up to date in one step.
+      when: "{{exists('.git')}}",
+      method: "shell.run",
+      params: {
+        message: [ "git pull" ]
+      }
+    },
     {
       when: "{{exists('conda_env')}}",
       method: "shell.run",
@@ -15,7 +23,10 @@ module.exports = {
         },
         message: [
           "python -m pip install --upgrade pip",
-          "uv pip install -r requirements.txt"
+          // Same lockfile as install.js — Update converges the env onto the
+          // exact pinned set (upgrades happen by regenerating the lock, not
+          // by letting PyPI drift underneath us).
+          "uv pip install -r requirements.lock.txt"
         ]
       }
     },

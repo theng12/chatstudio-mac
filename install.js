@@ -13,7 +13,12 @@ module.exports = {
         },
         message: [
           "python -m pip install --upgrade pip",
-          "uv pip install -r requirements.txt"
+          // Install from the fully-pinned lock, NOT the floors file — a fresh
+          // machine months from now gets the exact package set this app was
+          // last verified against, instead of whatever PyPI resolves that day.
+          // (requirements.txt keeps the human-edited floors; see the lock's
+          // header for the regenerate flow when upgrading deps on purpose.)
+          "uv pip install -r requirements.lock.txt"
         ]
       }
     }

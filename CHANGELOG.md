@@ -10,6 +10,26 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.19.0] — 2026-07-09
+
+### Added — dependency lockfile: fresh installs are now reproducible forever
+
+The failure mode this closes: `requirements.txt` uses version **floors** (`mlx-lm>=0.31`), so a fresh install months from now would resolve to whatever PyPI serves that day — one breaking release in any dependency bricks the app on a new machine while existing installs keep working, and the difference is invisible until it bites.
+
+- **`app/requirements.lock.txt`** — the full 50-package pinned set of a known-good install (`pip freeze` of the verified env, with conda's local `file://` reference for `packaging` normalized to a real PyPI pin). Python itself was already pinned (`python=3.12` in install.js).
+- **`install.js` and `update.js` now install from the lock**, not the floors file. A brand-new machine gets the byte-identical package set this app was last verified against.
+- **Upgrades become deliberate:** edit floors in `requirements.txt` → install → verify the app works → regenerate the lock (flow documented in the lock's header) → commit. Every dependency change is now a reviewed, revertable git commit instead of silent drift.
+- **`update.js` also gained a `git pull` step** (guarded by `.git` existing) — its header claimed "not cloned from a git remote," which stopped being true when this repo went up on GitHub; clones installed via Pinokio's Download-from-URL now get code + lock updates in one click.
+
+Verified: `uv pip install -r requirements.lock.txt` against the live env → "Checked 50 packages in 81ms," all satisfied; both launcher scripts pass `node --check`.
+
+### Notes
+
+- MINOR bump (1.18.4 → 1.19.0) — install-pipeline change, no package versions changed (the lock pins exactly what's already installed). **Just run Update.**
+- The lock is macOS-arm64/py3.12-specific, matching this app's declared `platform`/`arch` — not a limitation, just a note for anyone forking to another platform.
+
+---
+
 ## [1.18.4] — 2026-07-08
 
 ### Improved — Provider API keys are easier to find and focus
