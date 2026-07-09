@@ -59,7 +59,19 @@
           <span class="b-ico">⚠️</span>
           <div>
             <strong>MLX engine not available.</strong>
-            <span class="muted" x-text="diag.error || 'mlx / mlx_lm are not importable yet — run Install / Reinstall from the Pinokio sidebar.'"></span>
+            <span class="muted" x-text="diag.error || 'mlx / mlx_lm are not importable yet — run Install from the Pinokio sidebar.'"></span>
+            <!-- An actual import error (as opposed to a not-yet-installed env)
+                 is almost always dependency drift: the machine resolved a
+                 mlx-lm / transformers combination different from the verified
+                 one. A clean reinstall from the committed lockfile fixes it. -->
+            <template x-if="diag.error">
+              <p class="muted small" style="margin-top:8px;">
+                This usually means the installed Python packages drifted from the tested set.
+                <strong>Update</strong> the app (to pull the latest lockfile), then run
+                <strong>Reset</strong> → <strong>Install</strong> from the Pinokio sidebar
+                to rebuild the environment from the pinned versions.
+              </p>
+            </template>
           </div>
         </div>
       </div>

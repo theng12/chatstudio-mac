@@ -10,6 +10,25 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.19.1] — 2026-07-09
+
+### Fixed — cryptic "'str' object has no attribute '__module__'" MLX failure + recovery guidance
+
+Reported on a second machine: the app showed **"MLX engine not available, mlx_lm not importable: 'str' object has no attribute '__module__'"** and no local models would load.
+
+Root cause: `import mlx_lm` imports **transformers** at the top level, and that machine had drifted to a mlx-lm / transformers version combination different from the verified one (it was installed weeks ago with floor-based `>=` requirements, before the v1.19.0 lockfile existed, and its old `update.js` had no `git pull` step so it could never self-heal). The error is transformers failing during its own import against an incompatible sub-dependency — nothing to do with the model or the API.
+
+- **`transformers` / `tokenizers` are now explicit floors in `requirements.txt`** (they were invisible transitive deps of mlx-lm before). They are the single most drift-prone part of the import chain, and the exact versions are already pinned in `requirements.lock.txt` — this just documents the sensitivity and stops a stale resolver from pulling an incompatible transformers.
+- **The "MLX engine not available" banner now shows a recovery path** when the failure is an actual import error (not a not-yet-installed env): Update → Reset → Install, which rebuilds the environment from the committed lockfile.
+
+**How to fix an already-drifted machine** (the reported case — a lockfile only helps installs that happen *after* it exists): Update the app to pull the latest lockfile, then run **Reset** (deletes `conda_env`) → **Install** (rebuilds from the pinned versions). Future fresh installs are already protected by the v1.19.0 lockfile.
+
+Verified: floors satisfied by the live env; `requirements.lock.txt` already pins `transformers==5.12.1` / `tokenizers==0.22.2`; `index.html` parses clean and the live server serves the new banner.
+
+### Notes
+
+- PATCH bump (1.19.0 → 1.19.1) — docs + a frontend banner hint, no package versions changed. **Just run Update.**
+
 ## [1.19.0] — 2026-07-09
 
 ### Added — dependency lockfile: fresh installs are now reproducible forever

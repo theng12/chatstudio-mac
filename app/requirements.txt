@@ -9,3 +9,11 @@ python-multipart>=0.0.9
 # architecture, so Gemma 4 models would fail to load on a stale env.
 mlx>=0.31
 mlx-lm>=0.31
+# transformers/tokenizers arrive transitively via mlx-lm, but they are the
+# single most drift-prone part of the import chain: `import mlx_lm` imports
+# transformers at top level, and an incompatible combo fails with a cryptic
+# "'str' object has no attribute '__module__'" at import time. Pinning floors
+# to the verified major keeps a stale resolver from pulling an incompatible
+# transformers. The exact versions live in requirements.lock.txt.
+transformers>=5.12
+tokenizers>=0.22
