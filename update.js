@@ -1,44 +1,58 @@
-// Update = pull the latest code from GitHub (when this copy is a git clone,
-// e.g. installed via Pinokio's "Download from URL"), converge deps onto the
-// committed lockfile, and restart the startup service if one is installed so
-// the running server picks up the new code.
+// One-click Update — correct in EVERY run mode (launchd service, start.js, or
+// stopped). Replaces the old split of "Update" vs "Update & Restart": one button
+// pulls the latest code, refreshes deps, and restarts whichever server this
+// machine actually runs.
+//
+// Why this exists: the old flow made users hunt several buttons and often left
+// production broken. "Update & Restart" was hardwired to stop/start start.js,
+// but in service mode the server IS the launchd service — so it stopped nothing
+// and then started a SECOND server that fought the service for the fixed port.
+// The restart here is service-aware and mutually exclusive: kickstart the
+// service, OR start start.js — never both. Deps install from source
+// (requirements*.txt, not the .lock) because a drifted lock can silently omit
+// packages.
 module.exports = {
   run: [
     {
-      // No-op for a non-git copy; on git clones this brings launcher scripts,
-      // backend code, AND the dep lockfile up to date in one step.
-      when: "{{exists('.git')}}",
-      method: "shell.run",
-      params: {
-        message: [ "git pull" ]
-      }
+      // start.js mode: stop it so its Python exits and re-imports after install.
+      // Service mode: start.js isn't running (skips) — the service keeps serving
+      // through pull+install and only blips at the final kickstart. Stopped: no-op.
+      when: "{{running('start.js')}}",
+      method: "script.stop",
+      params: { uri: "start.js" }
     },
     {
+      method: "shell.run",
+      params: { message: "git pull" }
+    },
+    {
+      // Base deps (always).
       when: "{{exists('conda_env')}}",
       method: "shell.run",
       params: {
         path: "app",
-        conda: {
-          "path": "{{path.resolve(cwd, 'conda_env')}}"
-        },
+        conda: { "path": "{{path.resolve(cwd, 'conda_env')}}" },
         message: [
           "python -m pip install --upgrade pip",
-          // Same lockfile as install.js — Update converges the env onto the
-          // exact pinned set (upgrades happen by regenerating the lock, not
-          // by letting PyPI drift underneath us).
-          "uv pip install -r requirements.lock.txt"
+          "uv pip install -r requirements.txt"
         ]
       }
     },
     {
-      // If this Mac runs the app as a launchd startup service, restart it after
-      // updating so it picks up the new backend code (the running service keeps
-      // the OLD code in memory until restarted). No-op when not installed.
+      // Restart the REAL server for this machine's mode — mutually exclusive so a
+      // second server never fights the service for the fixed port.
       when: "{{exists('service/.installed')}}",
       method: "shell.run",
-      params: {
-        message: [ "bash restart_service.sh" ]
-      }
+      params: { message: [ "bash restart_service.sh" ] }
+    },
+    {
+      when: "{{!exists('service/.installed')}}",
+      method: "script.start",
+      params: { uri: "start.js" }
+    },
+    {
+      method: "notify",
+      params: { html: "Updated &amp; restarted — you're on the latest version." }
     }
   ]
 }

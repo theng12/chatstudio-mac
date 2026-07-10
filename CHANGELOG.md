@@ -10,6 +10,21 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.19.2] — 2026-07-10
+
+### Fixed — One-click Update that works in service mode
+
+Overhauled the update flow. The old "Update & Restart" was hardwired to stop/start `start.js`, but in production this app runs as an always-on launchd **service** — so it stopped nothing and then launched a *second* server that fought the service for the fixed port, leaving updates half-applied.
+
+- **One Update button, correct in every run mode.** The unified `update.js` detects the mode and restarts the **real** server (kickstart the service **or** start `start.js` — never both), so updating no longer requires manually stopping production first.
+- **Deps install from source** (`requirements.txt`) rather than a lock that can drift.
+- **"Update & Restart" folded into "Update"** (kept as a back-compat alias that forwards to `update.js`).
+
+### Notes
+
+- PATCH bump (1.19.1 → 1.19.2) — launcher scripts only (`update.js`, `update_and_restart.js`, `pinokio.js`). No app-code change.
+
+---
 ## [1.19.1] — 2026-07-09
 
 ### Fixed — cryptic "'str' object has no attribute '__module__'" MLX failure + recovery guidance

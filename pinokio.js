@@ -56,7 +56,7 @@ module.exports = {
         { icon: "fa-solid fa-folder-open", text: "Service Logs", href: "logs/service?fs=true" },
         { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
         { icon: "fa-regular fa-circle-xmark", text: "Uninstall Startup Service", href: "unservice.js" },
-        { icon: "fa-solid fa-rotate", text: "Update & Restart", href: "update_and_restart.js" }
+        { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" }
       ]
     }
 
@@ -88,7 +88,7 @@ module.exports = {
             href: "open_external.js",
             params: { url: browserUrl } },
           { icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
-          { icon: "fa-solid fa-rotate", text: "Update & Restart", href: "update_and_restart.js" },
+          { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
           { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
           serviceItem
         ]
