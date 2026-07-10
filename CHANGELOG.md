@@ -10,6 +10,18 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.19.8] — 2026-07-10
+
+### Fixed — download ETA settle-guard + dangerous model-size/memory under-counts
+
+**Absurd download ETA (`downloads.py`).** Same suite-wide fix: the speed EMA's first near-zero sample (taken before real bytes land) produced ETAs like "99679m 03s" seconds after clicking Download. `eta_seconds` is now suppressed until the job has ≥3 s of runtime. (`formatDuration()` already had hour rollup, so the frontend was left unchanged.)
+
+**Corrected 4 dangerous catalog under-counts.** Some entries listed a fraction of their real size with a too-low memory floor — most seriously `Llama-4-Scout-17B-16E` (a 16-expert MoE) was catalogued at 10 GB / 16 GB-floor but is really a 61 GB download that would hard-OOM a 16 GB Mac; it is now 61 GB / 64 GB. Also `Qwen3-Coder-30B-A3B` 9→17 GB (floor 16→24), `Nemotron-3-Nano-Omni-30B-A3B` 9→20 GB (floor 16→24), and `Ministral-3-3B` 2→2.8 GB. Verified against the HF API `blobs=true` listing.
+
+**Removed prior-generation Gemma 2.** `gemma-2-2b-it-4bit` and `gemma-2-9b-it-4bit` are superseded at equal sizes by the Gemma 3 / Gemma 4 entries; both were removed along with the now-empty `gemma2` family definition.
+
+**Checked, left unchanged:** the remaining LLM sizes/floors were audited against real HF sizes and are accurate (LLM runtime memory tracks model size, so those floors are sound). `py_compile` clean; catalog re-imports to 39 models.
+
 ## [1.19.7] — 2026-07-10
 
 ### Fixed — Version badge no longer uses an undefined color variable

@@ -159,21 +159,6 @@ FAMILIES: dict[str, Family] = {
             "used here for text chat only."
         ),
     ),
-    "gemma2": Family(
-        id="gemma2",
-        label="Gemma 2",
-        summary=(
-            "Google's previous-generation Gemma 2 instruction-tuned chat "
-            "models, quantized to MLX by mlx-community. Still a solid, "
-            "lightweight, text-only general assistant — kept for continuity."
-        ),
-        how_to_use=(
-            "Prefer Gemma 3 or Gemma 4 for new work. Reach for Gemma 2 9B if "
-            "you specifically want the older generation's behavior, or the 2B "
-            "for a tiny, fast text-only assistant."
-        ),
-        context_note=None,
-    ),
     "phi": Family(
         id="phi",
         label="Phi",
@@ -329,8 +314,8 @@ CATALOG: tuple[ModelEntry, ...] = (
         repo="mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
         label="Llama 4 Scout 17B-16E MoE Instruct (4-bit)",
         family="llama",
-        size_gb=10.0,
-        min_unified_memory_gb=16,
+        size_gb=61.0,
+        min_unified_memory_gb=64,
         recommended_hardware="16 GB+ recommended. MoE: all 17B params in memory, ~4B active per token for fast generation.",
         params_b=17,
         quant="4bit",
@@ -468,8 +453,8 @@ CATALOG: tuple[ModelEntry, ...] = (
         repo="mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit",
         label="Qwen3 Coder 30B-A3B MoE Instruct (4-bit)",
         family="qwen3",
-        size_gb=9.0,
-        min_unified_memory_gb=16,
+        size_gb=17.0,
+        min_unified_memory_gb=24,
         recommended_hardware="16 GB+ recommended. MoE: all 30B in memory, ~3B active per token.",
         params_b=30,
         quant="4bit",
@@ -517,7 +502,7 @@ CATALOG: tuple[ModelEntry, ...] = (
         repo="mlx-community/Ministral-3-3B-Instruct-2512-4bit",
         label="Ministral 3 3B Instruct (4-bit)",
         family="ministral",
-        size_gb=2.0,
+        size_gb=2.8,
         min_unified_memory_gb=8,
         recommended_hardware="Any Apple Silicon Mac with 8 GB.",
         params_b=3,
@@ -639,31 +624,6 @@ CATALOG: tuple[ModelEntry, ...] = (
         best_for="The heavyweight Gemma 3 — top-tier quality. Pick on a 32 GB+ Mac when you want the most from Gemma 3.",
     ),
 
-    # ──────────── Gemma 2 (previous gen) ────────────
-    ModelEntry(
-        repo="mlx-community/gemma-2-2b-it-4bit",
-        label="Gemma 2 2B Instruct (4-bit)",
-        family="gemma2",
-        size_gb=1.5,
-        min_unified_memory_gb=8,
-        recommended_hardware="Any Apple Silicon Mac with 8 GB.",
-        params_b=2,
-        quant="4bit",
-        best_for="A tiny, fast previous-gen assistant. Reach for Gemma 3 1B/4B first; keep this if you specifically want Gemma 2 behavior.",
-    ),
-    ModelEntry(
-        repo="mlx-community/gemma-2-9b-it-4bit",
-        label="Gemma 2 9B Instruct (4-bit)",
-        family="gemma2",
-        size_gb=5.2,
-        min_unified_memory_gb=12,
-        recommended_hardware="M1 Pro / M2 16 GB recommended.",
-        params_b=9,
-        quant="4bit",
-        best_for="Google's previous-gen mid-size assistant. Gemma 3 4B/12B generally supersede it, but it's still a solid, familiar text-only model.",
-    ),
-
-    # ──────────── Phi ────────────
     ModelEntry(
         repo="mlx-community/Phi-3.5-mini-instruct-4bit",
         label="Phi-3.5 Mini Instruct (4-bit)",
@@ -770,8 +730,8 @@ CATALOG: tuple[ModelEntry, ...] = (
         repo="mlx-community/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-4bit",
         label="Nemotron 3 Nano Omni 30B-A3B Reasoning (4-bit)",
         family="nemotron",
-        size_gb=9.0,
-        min_unified_memory_gb=16,
+        size_gb=20.0,
+        min_unified_memory_gb=24,
         recommended_hardware="16 GB+ recommended. MoE: all 30B in memory, ~3B active per token.",
         params_b=30,
         quant="4bit",
