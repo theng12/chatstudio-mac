@@ -84,6 +84,25 @@ FAMILIES: dict[str, Family] = {
         ),
         context_note="Qwen3 supports up to a 128K context window upstream; actual usable context depends on available unified memory.",
     ),
+    "qwen3.5": Family(
+        id="qwen3.5",
+        label="Qwen3.5 (Vision)",
+        summary=(
+            "Alibaba's Qwen3.5 generation — a unified vision-language family "
+            "(text + image understanding), quantized to MLX by mlx-community. "
+            "Unlike the text-only Qwen families, these load through mlx-vlm and "
+            "can read attached images. Dense sizes 0.8B–27B plus A3B / A10B MoE "
+            "variants."
+        ),
+        how_to_use=(
+            "Load one and chat as usual — you can also attach an image with the "
+            "📎 button and ask about it. The 9B is the recommended all-rounder; "
+            "the 4B fits any Mac; 35B-A3B and 122B-A10B are MoE models for "
+            "high-RAM machines. Needs mlx-vlm (installed with the app) — run "
+            "Update if a model reports the vision engine is missing."
+        ),
+        context_note="Qwen3.5 supports up to a 256K context window upstream; actual usable context depends on available unified memory. Image input requires mlx-vlm.",
+    ),
     "mistral": Family(
         id="mistral",
         label="Mistral",
@@ -272,6 +291,7 @@ class ModelEntry:
     is_starter: bool = False
     is_coder: bool = False
     is_reasoning: bool = False
+    is_vision: bool = False        # vision-language model — loads via mlx-vlm, accepts images
 
 
 CATALOG: tuple[ModelEntry, ...] = (
@@ -460,6 +480,94 @@ CATALOG: tuple[ModelEntry, ...] = (
         quant="4bit",
         is_coder=True,
         best_for="A fast MoE code model — activates only ~3B params per token for quick generation while keeping 30B of knowledge loaded. Top-tier code quality on 16 GB+ Macs.",
+    ),
+
+    # ──────────── Qwen3.5 (Vision-Language) ────────────
+    # Unified VL models — load via mlx-vlm (is_vision=True), accept image input.
+    # -MLX-4bit naming for the small dense sizes, plain -4bit for the larger MoE.
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-4B-MLX-4bit",
+        label="Qwen3.5 4B (Vision, MLX 4-bit)",
+        family="qwen3.5",
+        size_gb=3.1,
+        min_unified_memory_gb=8,
+        recommended_hardware="Any Apple Silicon Mac with 8 GB. Fits everywhere.",
+        params_b=4,
+        quant="4bit",
+        is_vision=True,
+        best_for="The lightweight Qwen3.5 vision model — fits any Mac and still reads images. Good starter to confirm the vision engine works before pulling a bigger one.",
+    ),
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-9B-MLX-4bit",
+        label="Qwen3.5 9B (Vision, MLX 4-bit) — recommended",
+        family="qwen3.5",
+        size_gb=6.0,
+        min_unified_memory_gb=12,
+        recommended_hardware="M1 Pro / M2 16 GB recommended (weights ~6 GB + vision encoder).",
+        params_b=9,
+        quant="4bit",
+        is_vision=True,
+        best_for="The recommended Qwen3.5 pick — the best quality/size balance for image understanding + chat on a 16 GB Mac.",
+    ),
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-0.8B-MLX-4bit",
+        label="Qwen3.5 0.8B (Vision, MLX 4-bit)",
+        family="qwen3.5",
+        size_gb=0.7,
+        min_unified_memory_gb=8,
+        recommended_hardware="Any Apple Silicon Mac. Tiny and fast.",
+        params_b=0.8,
+        quant="4bit",
+        is_vision=True,
+        best_for="The smallest vision model — fast, low-memory image captioning and quick multimodal Q&A on any Mac.",
+    ),
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-2B-MLX-4bit",
+        label="Qwen3.5 2B (Vision, MLX 4-bit)",
+        family="qwen3.5",
+        size_gb=1.8,
+        min_unified_memory_gb=8,
+        recommended_hardware="Any Apple Silicon Mac with 8 GB.",
+        params_b=2,
+        quant="4bit",
+        is_vision=True,
+        best_for="A small step up from 0.8B with better image reasoning, still comfortable on 8 GB Macs.",
+    ),
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-27B-4bit",
+        label="Qwen3.5 27B (Vision, MLX 4-bit)",
+        family="qwen3.5",
+        size_gb=16.1,
+        min_unified_memory_gb=24,
+        recommended_hardware="M-series with 24 GB+ unified memory.",
+        params_b=27,
+        quant="4bit",
+        is_vision=True,
+        best_for="The dense 27B — noticeably stronger image + text reasoning than the 9B. For 24 GB+ Macs that want top vision quality.",
+    ),
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-35B-A3B-4bit",
+        label="Qwen3.5 35B-A3B MoE (Vision, MLX 4-bit)",
+        family="qwen3.5",
+        size_gb=20.4,
+        min_unified_memory_gb=32,
+        recommended_hardware="32 GB+ recommended. MoE: ~3B params active per token for fast generation.",
+        params_b=35,
+        quant="4bit",
+        is_vision=True,
+        best_for="MoE vision model — 35B of knowledge in memory but only ~3B active per token, so it generates faster than a dense 35B. Great quality/speed on 32 GB+ Macs.",
+    ),
+    ModelEntry(
+        repo="mlx-community/Qwen3.5-122B-A10B-4bit",
+        label="Qwen3.5 122B-A10B MoE (Vision, MLX 4-bit)",
+        family="qwen3.5",
+        size_gb=69.6,
+        min_unified_memory_gb=96,
+        recommended_hardware="96 GB+ unified memory (Mac Studio / high-RAM MacBook Pro). ~10B params active per token.",
+        params_b=122,
+        quant="4bit",
+        is_vision=True,
+        best_for="The flagship Qwen3.5 vision MoE — top quality, for very high-RAM Macs. Only ~10B experts fire per token, so generation stays usable despite the size.",
     ),
 
     # ──────────── Mistral ────────────
@@ -770,6 +878,7 @@ def serialize_model(m: ModelEntry) -> dict:
         "is_starter": m.is_starter,
         "is_coder": m.is_coder,
         "is_reasoning": m.is_reasoning,
+        "is_vision": m.is_vision,
         "fit": fit,
     }
 

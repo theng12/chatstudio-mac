@@ -68,6 +68,7 @@ function studio() {
     loadingModel: null,
     messages: [],
     draft: "",
+    draftImages: [],   // data URLs attached to the next message (vision models)
     streaming: false,
     streamingText: "",
     showParams: false,
@@ -712,6 +713,25 @@ function studio() {
     },
 
     // ════════════ chat send / stream ════════════
+    /** Is the currently-selected model a vision-language model? Drives the
+     *  📎 attach button + image preview. Looks the repo up in the catalog
+     *  (this.models); non-catalog models are treated as text-only here. */
+    get currentIsVision() {
+      if (!this.currentRepo) return false;
+      const m = (this.models || []).find(x => x.repo === this.currentRepo);
+      return !!(m && m.is_vision);
+    },
+    onImagePick(event) {
+      const files = Array.from(event.target.files || []);
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) continue;
+        const reader = new FileReader();
+        reader.onload = () => { this.draftImages.push(reader.result); };
+        reader.readAsDataURL(f);   // data:image/...;base64,... — what the backend expects
+      }
+      event.target.value = "";     // allow re-picking the same file
+    },
+    removeDraftImage(i) { this.draftImages.splice(i, 1); },
     onEnter(e) {
       if (e.shiftKey) return;            // Shift+Enter = newline
       e.preventDefault();
@@ -725,10 +745,12 @@ function studio() {
     },
     async sendMessage() {
       const text = this.draft.trim();
-      if (!text || !this.currentRepo || this.streaming) return;
+      const images = this.draftImages.slice();   // images for this turn only
+      if ((!text && !images.length) || !this.currentRepo || this.streaming) return;
       this.continueState = null;   // a new message supersedes any pending "continue"
-      this.messages.push({ role: "user", content: text });
+      this.messages.push({ role: "user", content: text, images: images.length ? images : undefined });
       this.draft = "";
+      this.draftImages = [];
       this.autogrow();
       this.streaming = true;
       this.streamingText = "";
@@ -752,6 +774,7 @@ function studio() {
             max_tokens: this.gen.maxTokens,
             top_p: this.gen.topP,
             stream: true,
+            images,   // applied to the current (last user) turn by the backend
           }),
         });
         if (!r.ok || !r.body) {

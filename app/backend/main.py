@@ -171,6 +171,7 @@ class ChatCompletionsBody(BaseModel):
     top_p: float = 1.0
     stream: bool = True
     exclude_providers: list[str] = []   # "Continue with fallback": skip these provider ids
+    images: list[str] = []              # data URLs / base64 for the current turn (vision models only)
 
 
 class OpenAIChatCompletionsBody(BaseModel):
@@ -791,6 +792,7 @@ async def chat_completions(body: ChatCompletionsBody):
             try:
                 for chunk in llm_engine.manager.stream_chat(
                     body.repo, messages, body.temperature, body.max_tokens, body.top_p,
+                    body.images,
                 ):
                     yield chunk
             except Exception as e:
@@ -804,6 +806,7 @@ async def chat_completions(body: ChatCompletionsBody):
     try:
         text = llm_engine.manager.chat_once(
             body.repo, messages, body.temperature, body.max_tokens, body.top_p,
+            body.images,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))

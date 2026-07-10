@@ -14,7 +14,11 @@ list into the prompt string the model expects. This mirrors what
 """
 from __future__ import annotations
 
+import base64
+import os
 import queue
+import re
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -22,6 +26,44 @@ from dataclasses import dataclass, field
 from typing import Iterator, Optional
 
 from . import cache
+
+
+def _decode_images(images: Optional[list]) -> tuple[list, list]:
+    """Turn the frontend's image payloads into file paths mlx-vlm can read.
+
+    Accepts data URLs (`data:image/png;base64,…`), bare base64, or http(s)
+    URLs. Returns (paths, temp_paths): `paths` is what to hand mlx-vlm;
+    `temp_paths` is the subset written to disk that the caller must delete
+    afterwards (http URLs are passed through untouched, not downloaded here)."""
+    paths: list = []
+    temp_paths: list = []
+    for img in images or []:
+        if not isinstance(img, str) or not img.strip():
+            continue
+        s = img.strip()
+        if s.startswith("http://") or s.startswith("https://"):
+            paths.append(s)
+            continue
+        m = re.match(r"data:image/([\w.+-]+);base64,(.*)$", s, re.DOTALL)
+        if m:
+            ext, b64 = m.group(1), m.group(2)
+        else:
+            ext, b64 = "png", s
+        if ext == "jpeg":
+            ext = "jpg"
+        try:
+            raw = base64.b64decode(b64)
+        except Exception:
+            continue
+        fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix="chatstudio-img-")
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(raw)
+        except Exception:
+            continue
+        paths.append(path)
+        temp_paths.append(path)
+    return paths, temp_paths
 
 
 def availability() -> dict:
@@ -47,13 +89,24 @@ def availability() -> dict:
     return out
 
 
+def vlm_available() -> bool:
+    """Whether mlx-vlm is importable — the engine for vision-language models
+    (e.g. the Qwen3.5 family). Optional: text-only chat works without it, so a
+    missing mlx-vlm only disables vision models, it doesn't break the app."""
+    try:
+        import mlx_vlm  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def diagnostics() -> dict:
     """Per-package health check, surfaced at /api/chat/diagnostics. Same
     spirit as VoiceStudio's generation.diagnostics() but scoped to the much
     smaller MLX-only dependency set this app needs."""
     avail = availability()
     packages = []
-    for pkg in ("mlx", "mlx_lm", "huggingface_hub"):
+    for pkg in ("mlx", "mlx_lm", "mlx_vlm", "huggingface_hub"):
         try:
             mod = __import__(pkg)
             packages.append({
@@ -64,6 +117,7 @@ def diagnostics() -> dict:
                 "role": {
                     "mlx": "Apple Silicon array/ML framework (Metal-backed)",
                     "mlx_lm": "Loads + runs MLX-quantized chat models",
+                    "mlx_vlm": "Vision-language engine (image+text models, e.g. Qwen3.5)",
                     "huggingface_hub": "Downloads model repos from Hugging Face",
                 }.get(pkg, ""),
             })
@@ -84,8 +138,43 @@ def diagnostics() -> dict:
 class LoadedModel:
     repo: str
     model: object
-    tokenizer: object
+    tokenizer: object          # tokenizer (text) OR processor (vision)
     loaded_at: float = field(default_factory=time.time)
+    kind: str = "text"         # "text" (mlx-lm) | "vlm" (mlx-vlm)
+    config: object = None       # model config — mlx-vlm's apply_chat_template needs it
+
+
+def is_vision_model(repo: str) -> bool:
+    """True if `repo` is a vision-language model that must load through mlx-vlm
+    instead of mlx-lm. Checks the catalog's `is_vision` flag first (fast, no
+    disk read), then falls back to inspecting the cached config.json for a
+    `vision_config` / *ForConditionalGeneration architecture — so a VLM the
+    user downloaded via Hub search (not in the catalog) is still detected."""
+    try:
+        from . import catalog
+        for m in catalog.CATALOG:
+            if m.repo == repo:
+                return bool(getattr(m, "is_vision", False))
+    except Exception:
+        pass
+    # Not in catalog — sniff the downloaded config.json under the HF snapshot.
+    try:
+        import json
+        snaps = cache.repo_cache_dir(repo) / "snapshots"
+        if snaps.exists():
+            for snap in snaps.iterdir():
+                cfg_path = snap / "config.json"
+                if cfg_path.exists():
+                    cfg = json.loads(cfg_path.read_text())
+                    if "vision_config" in cfg:
+                        return True
+                    archs = cfg.get("architectures") or []
+                    if any("ForConditionalGeneration" in a for a in archs):
+                        return True
+                    break
+    except Exception:
+        pass
+    return False
 
 
 class LLMManager:
@@ -214,6 +303,33 @@ class LLMManager:
                 except Exception:
                     pass
 
+            vision = is_vision_model(repo)
+
+            if vision:
+                # Vision-language models (e.g. Qwen3.5) load through mlx-vlm,
+                # which returns (model, processor). The processor takes the
+                # tokenizer slot; config is kept for apply_chat_template.
+                try:
+                    from mlx_vlm import load as vlm_load
+                except Exception as e:
+                    self._load_error = (
+                        f"{repo} is a vision model but mlx-vlm isn't installed: {e}. "
+                        f"Run Update / reinstall to pull mlx-vlm."
+                    )
+                    raise RuntimeError(self._load_error) from e
+                try:
+                    model, processor = vlm_load(repo)
+                except Exception as e:
+                    self._load_error = f"failed to load vision model {repo}: {e}"
+                    raise RuntimeError(self._load_error) from e
+                self._loaded = LoadedModel(
+                    repo=repo, model=model, tokenizer=processor,
+                    kind="vlm", config=getattr(model, "config", None),
+                )
+                self._load_error = None
+                self._last_used = time.time()
+                return {"repo": repo, "already_loaded": False, "kind": "vlm"}
+
             try:
                 from mlx_lm import load as mlx_load
             except Exception as e:
@@ -259,8 +375,16 @@ class LLMManager:
                 )
             return self._loaded
 
-    def build_prompt(self, repo: Optional[str], messages: list[dict]) -> tuple[LoadedModel, str]:
+    def build_prompt(self, repo: Optional[str], messages: list[dict], num_images: int = 0) -> tuple[LoadedModel, str]:
         loaded = self._require_loaded(repo)
+
+        # ── Vision path: mlx-vlm builds the prompt from the messages list and
+        #    places the image placeholder(s) on the last user turn itself. ──
+        if loaded.kind == "vlm":
+            from mlx_vlm import apply_chat_template as vlm_apply
+            prompt = vlm_apply(loaded.tokenizer, loaded.config, messages, num_images=num_images)
+            return loaded, prompt
+
         tokenizer = loaded.tokenizer
 
         def apply(msgs: list[dict]) -> str:
@@ -317,6 +441,7 @@ class LLMManager:
         temperature: float = 0.7,
         max_tokens: int = 1024,
         top_p: float = 1.0,
+        images: Optional[list] = None,
     ) -> Iterator[str]:
         """Yields text chunks as the model generates.
 
@@ -324,9 +449,21 @@ class LLMManager:
         the SAME thread the model was loaded on — because MLX arrays are
         thread/stream-bound. Prompt building (tokenizer only, no GPU work) runs
         on the caller's thread; generated text is bridged back over a queue, so
-        this stays a simple synchronous iterator for callers."""
+        this stays a simple synchronous iterator for callers.
+
+        `images` (data URLs / base64 / http URLs) are only used by vision
+        models — text models ignore them."""
         self.touch()  # mark in-use so the idle auto-unload timer resets
-        loaded, prompt = self.build_prompt(repo, messages)
+
+        # Images only apply to the vision path; decode them to files so mlx-vlm
+        # can read them (and remember which to delete afterwards).
+        loaded_peek = self._require_loaded(repo)
+        image_paths: list = []
+        temp_paths: list = []
+        if loaded_peek.kind == "vlm" and images:
+            image_paths, temp_paths = _decode_images(images)
+
+        loaded, prompt = self.build_prompt(repo, messages, num_images=len(image_paths))
 
         chunks: "queue.Queue" = queue.Queue()
         _DONE = object()
@@ -337,23 +474,45 @@ class LLMManager:
             # cancel meant for the generation that's actually running.
             self._cancel.clear()
             try:
-                from mlx_lm import stream_generate
-                from mlx_lm.sample_utils import make_sampler
-                sampler = make_sampler(temp=temperature, top_p=top_p)
-                for response in stream_generate(
-                    loaded.model, loaded.tokenizer, prompt,
-                    max_tokens=max_tokens, sampler=sampler,
-                ):
-                    text = getattr(response, "text", None)
-                    if text:
-                        chunks.put(("chunk", text))
-                    # Stop generating as soon as a cancel is requested — this is
-                    # what actually frees the GPU, not just closing the socket.
-                    if self._cancel.is_set():
-                        break
-                chunks.put((_DONE, None))
+                if loaded.kind == "vlm":
+                    # Vision-language generation via mlx-vlm. Text-only turns
+                    # (no image attached) still work — image is just None.
+                    from mlx_vlm import stream_generate as vlm_stream
+                    for response in vlm_stream(
+                        loaded.model, loaded.tokenizer, prompt,
+                        image=(image_paths or None),
+                        max_tokens=max_tokens, temperature=temperature, top_p=top_p,
+                    ):
+                        text = getattr(response, "text", None)
+                        if text:
+                            chunks.put(("chunk", text))
+                        if self._cancel.is_set():
+                            break
+                    chunks.put((_DONE, None))
+                else:
+                    from mlx_lm import stream_generate
+                    from mlx_lm.sample_utils import make_sampler
+                    sampler = make_sampler(temp=temperature, top_p=top_p)
+                    for response in stream_generate(
+                        loaded.model, loaded.tokenizer, prompt,
+                        max_tokens=max_tokens, sampler=sampler,
+                    ):
+                        text = getattr(response, "text", None)
+                        if text:
+                            chunks.put(("chunk", text))
+                        # Stop generating as soon as a cancel is requested — this
+                        # is what frees the GPU, not just closing the socket.
+                        if self._cancel.is_set():
+                            break
+                    chunks.put((_DONE, None))
             except Exception as e:  # surfaced to the caller below
                 chunks.put(("error", e))
+            finally:
+                for p in temp_paths:
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
 
         future = self._exec.submit(_generate)
         try:
@@ -384,11 +543,12 @@ class LLMManager:
         temperature: float = 0.7,
         max_tokens: int = 1024,
         top_p: float = 1.0,
+        images: Optional[list] = None,
     ) -> str:
         """Non-streaming convenience wrapper — joins the full stream into one
         string. Used by callers that don't need token-by-token output."""
         return "".join(
-            self.stream_chat(repo, messages, temperature, max_tokens, top_p)
+            self.stream_chat(repo, messages, temperature, max_tokens, top_p, images)
         )
 
 

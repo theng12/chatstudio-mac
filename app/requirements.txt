@@ -17,3 +17,9 @@ mlx-lm>=0.31
 # transformers. The exact versions live in requirements.lock.txt.
 transformers>=5.12
 tokenizers>=0.22
+# mlx-vlm adds the vision-language engine path (image+text chat) used by the
+# Qwen3.5 family. It reuses the same mlx / mlx-lm floors above and requires
+# transformers <5.13, which the >=5.12 floor already satisfies (5.12.x). Only
+# vision models route to mlx-vlm; text-only models keep loading via mlx-lm, so
+# this is purely additive to the existing chat path.
+mlx-vlm>=0.6.4

@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.20.0] — 2026-07-10
+
+### Added — vision-language chat (mlx-vlm) + the Qwen3.5 model family
+
+Chat Studio can now run **vision-language models** — chat that understands attached images — alongside the existing text-only LLMs. Added the **Qwen3.5** family (mlx-community MLX builds), which is a unified VL family: every size is `image-text-to-text`, so it loads through **mlx-vlm** rather than mlx-lm.
+
+**New engine path (`llm_engine.py`).** Model loading now detects vision models (catalog `is_vision` flag, or a `vision_config` / `*ForConditionalGeneration` architecture in the downloaded `config.json`) and routes them to `mlx_vlm.load` + `mlx_vlm.stream_generate`; text models keep loading through `mlx_lm` exactly as before. The change is **additive** — the text path is untouched, and if mlx-vlm isn't installed only the vision models are affected (they report "vision engine missing; run Update"), text chat keeps working.
+
+**Image input.** `/api/chat/completions` accepts an optional `images` array (data URLs / base64) applied to the current turn. The chat composer shows a 📎 attach button (only for vision models), previews attachments, and renders them inline in the conversation. `mlx-vlm>=0.6.4` added to `requirements.txt` — it reuses the existing mlx / mlx-lm floors and requires transformers <5.13, which the current `>=5.12` floor already satisfies (5.12.x).
+
+**Qwen3.5 catalog family (7 entries).** 0.8B / 2B / 4B / 9B (dense, `-MLX-4bit`) and 27B / 35B-A3B / 122B-A10B (larger + MoE, plain `-4bit`). Sizes and memory floors set from the real Hugging Face repo sizes (0.7 / 1.8 / 3.1 / 6.0 / 16.1 / 20.4 / 69.6 GB). The 9B is the recommended pick.
+
+**⚠️ Requires a reinstall + testing.** Because it adds a dependency (mlx-vlm and its transitive deps: Pillow, opencv, mlx-audio, …), you must **Update then reinstall** so the env picks up mlx-vlm before vision models will load. This feature was authored against the mlx-vlm 0.6.4 API (verified `qwen3_5`/`qwen3_5_moe` support and the `load` / `apply_chat_template` / `stream_generate` signatures) but was **not** run end-to-end here — please confirm a vision model loads and answers an image question after reinstalling. Text chat is unaffected either way.
+
 ## [1.19.8] — 2026-07-10
 
 ### Fixed — download ETA settle-guard + dangerous model-size/memory under-counts
