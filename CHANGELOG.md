@@ -10,6 +10,25 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.19.6] — 2026-07-10
+
+### Changed — Conversation chrome is quieter and easier to scan
+
+The chat workspace mixed emoji-heavy navigation, oversized rounding, a decorative
+backdrop, and wide text controls around an otherwise dense tool. Primary tabs are now
+clean text labels, the active view has a clearer accent, user messages use a restrained
+warm tint to separate roles, and Send/Stop are stable square icon controls with accessible
+labels. The existing provider-card settings navigation remains unchanged.
+
+### Verification
+
+- Validated JavaScript and HTML, exercised the live chat shell at desktop and mobile
+  widths, and confirmed no horizontal overflow or page errors.
+- Message streaming, session history, model loading, provider routing, and settings
+  behavior were checked and deliberately left unchanged.
+
+---
+
 ## [1.19.5] — 2026-07-10
 
 ### Changed — Version now shown as a badge in the top-right header (consistent across all sibling apps)

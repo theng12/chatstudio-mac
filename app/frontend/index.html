@@ -32,14 +32,14 @@
     </div>
 
     <nav class="tabs">
-      <button :class="{active: tab==='chat'}" @click="go('chat')">💬 Chat</button>
-      <button :class="{active: tab==='models'}" @click="go('models')">🧊 Models</button>
+      <button :class="{active: tab==='chat'}" @click="go('chat')">Chat</button>
+      <button :class="{active: tab==='models'}" @click="go('models')">Models</button>
       <button :class="{active: tab==='downloads'}" @click="go('downloads')">
-        ⬇ Downloads
+        Downloads
         <span class="badge" x-show="activeDownloadCount > 0" x-text="activeDownloadCount" x-cloak></span>
       </button>
-      <button :class="{active: tab==='api'}" @click="go('api')">🔌 API</button>
-      <button :class="{active: tab==='settings'}" @click="go('settings')">⚙ Settings</button>
+      <button :class="{active: tab==='api'}" @click="go('api')">API</button>
+      <button :class="{active: tab==='settings'}" @click="go('settings')">Settings</button>
     </nav>
 
     <div class="status">
@@ -54,7 +54,7 @@
 
     <!-- engine missing -->
     <template x-if="!diag.available">
-      <div style="padding:26px 22px;">
+      <div class="chat-engine-state">
         <div class="banner warn">
           <span class="b-ico">⚠️</span>
           <div>
@@ -235,8 +235,10 @@
                       :placeholder="currentRepo ? 'Message ' + shortName(currentRepo) + '…' : 'Load a model to start…'"
                       @input="autogrow()"
                       @keydown.enter="onEnter($event)"></textarea>
-            <button x-show="!streaming" class="primary send" :disabled="!currentRepo || !draft.trim()" @click="sendMessage()">Send</button>
-            <button x-show="streaming" x-cloak class="stop" @click="stopGen()">■ Stop</button>
+            <button x-show="!streaming" class="primary send" :disabled="!currentRepo || !draft.trim()"
+                    @click="sendMessage()" aria-label="Send message" title="Send message">↑</button>
+            <button x-show="streaming" x-cloak class="stop" @click="stopGen()"
+                    aria-label="Stop generation" title="Stop generation">■</button>
           </div>
           <div class="composer-hint">
             <span>Enter to send · Shift+Enter for newline</span>
