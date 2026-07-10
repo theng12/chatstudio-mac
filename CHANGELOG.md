@@ -10,6 +10,23 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.19.7] — 2026-07-10
+
+### Fixed — Version badge no longer uses an undefined color variable
+
+The header badge referenced `--card`, which does not exist in Chat Studio's palette.
+Browsers discarded the declaration and rendered the badge background transparent. It
+now uses the established panel color, matching the intended header treatment.
+
+### Verification
+
+- Confirmed the live pre-fix computed background was transparent, then verified the
+  corrected stylesheet resolves to the panel color with no JavaScript or layout errors.
+- Provider navigation, API snippets, model formatting, and chat behavior were checked
+  and deliberately left unchanged.
+
+---
+
 ## [1.19.6] — 2026-07-10
 
 ### Changed — Conversation chrome is quieter and easier to scan
