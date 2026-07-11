@@ -724,7 +724,18 @@ function studio() {
     onImagePick(event) {
       const files = Array.from(event.target.files || []);
       for (const f of files) {
-        if (!f.type.startsWith("image/")) continue;
+        if (this.draftImages.length >= 4) {
+          this.showToast("Attach at most 4 images per message");
+          break;
+        }
+        if (!f.type.startsWith("image/")) {
+          this.showToast(`${f.name} is not an image`);
+          continue;
+        }
+        if (f.size > 10 * 1024 * 1024) {
+          this.showToast(`${f.name} is larger than 10 MB`);
+          continue;
+        }
         const reader = new FileReader();
         reader.onload = () => { this.draftImages.push(reader.result); };
         reader.readAsDataURL(f);   // data:image/...;base64,... — what the backend expects
@@ -908,7 +919,10 @@ function studio() {
     },
 
     // ════════════ markdown (tiny, XSS-safe: escape first) ════════════
-    escapeHtml(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); },
+    escapeHtml(s) {
+      return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    },
     renderMarkdown(src) {
       if (!src) return "";
       const parts = String(src).split("```");

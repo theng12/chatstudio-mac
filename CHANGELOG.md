@@ -10,6 +10,34 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.20.1] — 2026-07-12
+
+### Security — safe Markdown, private local data, bounded vision input
+
+- Markdown now escapes quotes before building links, preventing model-generated
+  link targets from breaking out of `href` and injecting HTML attributes.
+- Provider/Hugging Face credentials and server-side conversation history are now
+  forced to owner-only (`0600`) permissions on read and after every atomic save.
+- Vision chat accepts at most four uploaded images of 10 MB each. Remote image URLs
+  are rejected to close the LAN-facing SSRF path, and malformed base64 now returns a
+  useful validation error instead of silently disappearing.
+- Chat, session, provider-key, and generation parameter payloads now have explicit
+  length/range limits to prevent accidental or hostile memory/disk exhaustion.
+- Remote update-version metadata is rendered as text instead of injected HTML.
+
+### UX
+
+- The attachment picker enforces the same four-image/10 MB limits before upload and
+  explains rejected files in the existing toast, avoiding a delayed backend error.
+
+### Verification
+
+- Python, JavaScript, and HTML checks pass; Pydantic rejection cases, image decoding,
+  Markdown attribute escaping, and owner-only file modes were exercised directly.
+  `pip-audit` reports no known vulnerabilities in the installed environment.
+- The documented LAN bind and permissive CORS remain unchanged pending fleet-wide API
+  authentication, so existing OpenAI-compatible clients continue to work.
+
 ## [1.20.0] — 2026-07-10
 
 ### Added — vision-language chat (mlx-vlm) + the Qwen3.5 model family

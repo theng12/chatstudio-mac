@@ -27,14 +27,14 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions
 from .downloads import manager
@@ -115,7 +115,7 @@ class StartDownloadBody(BaseModel):
 class SettingsBody(BaseModel):
     hf_token: Optional[str] = None
     uninterrupted_mode: Optional[bool] = None
-    request_timeout: Optional[int] = None
+    request_timeout: Optional[int] = Field(None, ge=5, le=300)
 
 
 class TokenTestBody(BaseModel):
@@ -123,7 +123,7 @@ class TokenTestBody(BaseModel):
 
 
 class ProviderKeyBody(BaseModel):
-    api_key: Optional[str] = None
+    api_key: Optional[str] = Field(None, max_length=16384)
 
 
 class ProviderPaidBody(BaseModel):
@@ -131,11 +131,11 @@ class ProviderPaidBody(BaseModel):
 
 
 class SessionBody(BaseModel):
-    id: Optional[str] = None
-    title: Optional[str] = None
-    model: Optional[str] = None
+    id: Optional[str] = Field(None, max_length=100)
+    title: Optional[str] = Field(None, max_length=200)
+    model: Optional[str] = Field(None, max_length=500)
     pinned: Optional[bool] = None
-    messages: Optional[list] = None
+    messages: Optional[list] = Field(None, max_length=500)
 
 
 class PinBody(BaseModel):
@@ -143,7 +143,7 @@ class PinBody(BaseModel):
 
 
 class RenameBody(BaseModel):
-    title: str = ""
+    title: str = Field("", max_length=200)
 
 
 class ProviderEnabledBody(BaseModel):
@@ -155,34 +155,44 @@ class ProviderOrderBody(BaseModel):
 
 
 class LoadModelBody(BaseModel):
-    repo: str
+    repo: str = Field(max_length=500)
 
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: Literal["system", "user", "assistant"]
+    content: str = Field(max_length=1_000_000)
 
 
 class ChatCompletionsBody(BaseModel):
-    repo: str
-    messages: list[ChatMessage]
-    temperature: float = 0.7
-    max_tokens: int = 1024
-    top_p: float = 1.0
+    repo: str = Field(max_length=500)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=200)
+    temperature: float = Field(0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(1024, ge=1, le=32768)
+    top_p: float = Field(1.0, gt=0.0, le=1.0)
     stream: bool = True
-    exclude_providers: list[str] = []   # "Continue with fallback": skip these provider ids
-    images: list[str] = []              # data URLs / base64 for the current turn (vision models only)
+    exclude_providers: list[str] = Field(default_factory=list, max_length=32)
+    images: list[str] = Field(default_factory=list, max_length=4)
+
+    @field_validator("images")
+    @classmethod
+    def validate_images(cls, images: list[str]) -> list[str]:
+        for image in images:
+            if image.startswith(("http://", "https://")):
+                raise ValueError("remote image URLs are not accepted; upload image data")
+            if len(image) > 14_000_000:
+                raise ValueError("each encoded image must be 10 MB or smaller")
+        return images
 
 
 class OpenAIChatCompletionsBody(BaseModel):
     """OpenAI-schema alias of ChatCompletionsBody — uses `model` instead of
     `repo` so existing OpenAI-client tooling (Continue.dev, Open WebUI, etc.)
     can point at this server as a drop-in `/v1` base URL."""
-    model: str
-    messages: list[ChatMessage]
-    temperature: float = 0.7
-    max_tokens: int = 1024
-    top_p: float = 1.0
+    model: str = Field(max_length=500)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=200)
+    temperature: float = Field(0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(1024, ge=1, le=32768)
+    top_p: float = Field(1.0, gt=0.0, le=1.0)
     stream: bool = False
 
 

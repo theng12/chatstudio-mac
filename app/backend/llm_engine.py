@@ -27,23 +27,26 @@ from typing import Iterator, Optional
 
 from . import cache
 
+_MAX_IMAGES = 4
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
 
 def _decode_images(images: Optional[list]) -> tuple[list, list]:
     """Turn the frontend's image payloads into file paths mlx-vlm can read.
 
-    Accepts data URLs (`data:image/png;base64,…`), bare base64, or http(s)
-    URLs. Returns (paths, temp_paths): `paths` is what to hand mlx-vlm;
-    `temp_paths` is the subset written to disk that the caller must delete
-    afterwards (http URLs are passed through untouched, not downloaded here)."""
+    Accepts data URLs (`data:image/png;base64,…`) or bare base64. Remote URLs
+    are intentionally rejected so this LAN-facing API cannot be used for SSRF.
+    Returns temporary file paths that the caller must delete afterwards."""
     paths: list = []
     temp_paths: list = []
+    if len(images or []) > _MAX_IMAGES:
+        raise ValueError(f"Attach at most {_MAX_IMAGES} images per message")
     for img in images or []:
         if not isinstance(img, str) or not img.strip():
-            continue
+            raise ValueError("Each image must be a base64 string or data URL")
         s = img.strip()
         if s.startswith("http://") or s.startswith("https://"):
-            paths.append(s)
-            continue
+            raise ValueError("Remote image URLs are not accepted; upload the image data instead")
         m = re.match(r"data:image/([\w.+-]+);base64,(.*)$", s, re.DOTALL)
         if m:
             ext, b64 = m.group(1), m.group(2)
@@ -51,16 +54,24 @@ def _decode_images(images: Optional[list]) -> tuple[list, list]:
             ext, b64 = "png", s
         if ext == "jpeg":
             ext = "jpg"
+        if ext not in {"png", "jpg", "webp"}:
+            raise ValueError(f"Unsupported image type: {ext}")
         try:
-            raw = base64.b64decode(b64)
-        except Exception:
-            continue
+            raw = base64.b64decode(b64, validate=True)
+        except Exception as e:
+            raise ValueError("Image payload is not valid base64") from e
+        if len(raw) > _MAX_IMAGE_BYTES:
+            raise ValueError("Each image must be 10 MB or smaller")
         fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix="chatstudio-img-")
         try:
             with os.fdopen(fd, "wb") as fh:
                 fh.write(raw)
         except Exception:
-            continue
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise
         paths.append(path)
         temp_paths.append(path)
     return paths, temp_paths

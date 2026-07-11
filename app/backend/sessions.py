@@ -22,9 +22,18 @@ _PATH = Path(__file__).resolve().parent / "sessions.json"
 _LOCK = threading.Lock()
 
 
+def _secure_permissions(path: Path) -> None:
+    """Chat history can be sensitive; keep it owner-readable only."""
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
 def _load() -> dict:
     try:
         if _PATH.exists():
+            _secure_permissions(_PATH)
             d = json.loads(_PATH.read_text())
             if isinstance(d, dict):
                 return d
@@ -36,7 +45,9 @@ def _load() -> dict:
 def _save(d: dict) -> None:
     tmp = _PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(d))
+    _secure_permissions(tmp)
     os.replace(tmp, _PATH)
+    _secure_permissions(_PATH)
 
 
 def _derive_title(messages: list) -> str:
