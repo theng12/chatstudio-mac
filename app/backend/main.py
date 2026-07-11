@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions
 from .downloads import manager
+from .fleet_auth import load_token as load_fleet_token, make_middleware as fleet_middleware, manifest
 
 
 # ───────────── App release version ─────────────
@@ -103,6 +104,8 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(NoCacheStaticMiddleware)
+FLEET_TOKEN = load_fleet_token()
+app.middleware("http")(fleet_middleware(FLEET_TOKEN))
 
 
 # ───────────── request models ─────────────
@@ -211,6 +214,13 @@ def health() -> dict:
         "idle_seconds": llm_engine.manager.idle_seconds(),
         "auto_unload": llm_engine.manager.last_auto_unload(),
     }
+
+
+@app.get("/api/capabilities")
+def capabilities() -> dict:
+    return manifest(modality="chat", title=app.title, version=APP_VERSION,
+                    operations=["chat", "vision", "openai_compatible"],
+                    diagnostics="/api/chat/diagnostics")
 
 
 # ── Update / generation health (auto-check surfaced by the web-UI banner) ──
