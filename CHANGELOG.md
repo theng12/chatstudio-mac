@@ -10,6 +10,15 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.21.5] — 2026-07-13
+
+### Fixed — saved fleet credentials apply without restarting Chat Studio
+
+- Protected requests now verify against the current owner-only fleet-token file instead of the value captured at process startup. Saving or rotating the credential in Studio Hub takes effect immediately for a running Chat Studio.
+- Authenticated browser cookies are refreshed to the current credential after a successful request.
+
+Verified with a live-rotation middleware regression test plus the full test suite. No launcher or dependency changes; **Just run Update**.
+
 ## [1.21.4] — 2026-07-09
 
 ### Added — orphaned download partials are now swept on startup (no re-download needed)

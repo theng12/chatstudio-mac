@@ -73,10 +73,14 @@ def make_middleware(token: str):
         if path in PUBLIC_PATHS or path.startswith("/assets/") or request.method == "OPTIONS" or is_loopback(request):
             return await call_next(request)
         offered = _presented(request)
-        if offered and secrets.compare_digest(offered, token):
+        # The Hub can rotate/save the shared credential while this Studio is
+        # running. Read the protected source on each authenticated request so
+        # the new value takes effect immediately instead of requiring restart.
+        current_token = load_token()
+        if offered and secrets.compare_digest(offered, current_token):
             response = await call_next(request)
-            if request.cookies.get(COOKIE_NAME) != token:
-                response.set_cookie(COOKIE_NAME, token, httponly=True, samesite="strict")
+            if request.cookies.get(COOKIE_NAME) != current_token:
+                response.set_cookie(COOKIE_NAME, current_token, httponly=True, samesite="strict")
             return response
         return JSONResponse({"detail": "Fleet token required for remote Studio access."}, 401)
     return middleware
@@ -92,4 +96,3 @@ def manifest(*, modality: str, title: str, version: str, operations: list[str], 
         "diagnostics_endpoint": diagnostics,
         "update": {"script": "update.js", "supports_drain": True},
     }
-
