@@ -98,6 +98,12 @@ class DownloadJob:
         bytes_done = cache.disk_bytes(self.repo)
         bytes_partial = cache.incomplete_bytes(self.repo)
         observed = bytes_done + bytes_partial
+        # Never report more than the known total — a transient extra partial
+        # (or an HF metadata size that slightly under-counts) must not make the
+        # bar read past 100% / "3.0 GB / 2.3 GB". Belt-and-suspenders on top of
+        # the de-dup in incomplete_bytes.
+        if self.total_bytes > 0:
+            observed = min(observed, self.total_bytes)
 
         # Update the rolling speed estimate. Only meaningful while running;
         # cleared when the job reaches a terminal state so the UI doesn't show
@@ -298,6 +304,14 @@ class DownloadManager:
     def _run(self, job: DownloadJob) -> None:
         job.state = "running"
         job.started_at = time.time()
+        # Clear orphaned .incomplete partials from earlier interrupted attempts
+        # before we start — otherwise their bytes get counted against this job
+        # and progress reads over 100% ("3.0 GB / 2.3 GB"). huggingface_hub
+        # resumes from the partial we keep.
+        reclaimed = cache.prune_stale_incomplete(job.repo)
+        if reclaimed:
+            print(f"[downloads] pruned {reclaimed / 1e9:.2f} GB of stale partials "
+                  f"for {job.repo}", flush=True)
         companions = catalog.companions_for(job.repo)
         total = self._resolve_total_bytes(job.repo, job.token)
         for c in companions:

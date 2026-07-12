@@ -10,6 +10,26 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.21.3] — 2026-07-09
+
+### Fixed — download progress could read past 100% ("3.0 GB / 2.3 GB"); catalog sizes corrected
+
+Reported: downloading `Qwen3-4B-Instruct-2507-4bit` showed **3.0 GB / 2.3 GB, 100%** — the observed bytes exceeded the total.
+
+**Root cause (the real bug): duplicate `.incomplete` partials were double-counted.** A retried/resumed download leaves more than one partial file for the *same* blob — huggingface_hub names them `<sha>.<etag>.incomplete` and writes a fresh `<etag>` temp on each attempt instead of resuming the old one. The on-disk cache had **two** partials of Qwen3-4B's single 2.26 GB weight file (2.0 GB + 0.9 GB), and `incomplete_bytes()` **summed** them → ~2.9 GB observed against a 2.3 GB total, plus ~0.6 GB of wasted disk.
+
+- **`incomplete_bytes()` now de-duplicates by target blob** — groups partials by their SHA prefix and counts only the largest (furthest-along) one per blob, never the sum.
+- **New `prune_stale_incomplete()` runs at the start of every download** — deletes orphaned partials (any whose blob is already complete, and all-but-the-largest for the same blob), reclaiming the wasted disk. huggingface_hub resumes from the survivor.
+- **Observed bytes are now capped at the known total** as a final guard, so the bar can never read past 100% even on a transient edge case.
+
+**Also — catalog sizes corrected against live Hugging Face metadata.** Surveyed all 46 models via the same `repo_info` call the downloader uses; updated 22 `size_gb` values to the real totals. The important ones were **under-reporters** that made the bar overshoot on their own: Ministral-3-8B (5.0→5.6), Devstral-Small-2-24B (14.0→15.1), Qwen2.5-14B/Coder-14B/DeepSeek-R1-14B (8.0→8.3), Qwen2.5-32B (18.0→18.4). Several others were rounded closer (Qwen3-4B 2.5→2.3, Llama-3.3-70B 42→39.7, Phi-4-mini 2.5→2.2).
+
+Verified: dedup + prune proven on a synthetic two-partials-one-blob repo (counts 2000 not 2900; prunes the 900 orphan; cleans a completed blob's leftover partial); live `/api/catalog` now reports Qwen3-4B at 2.3 GB, Ministral-3-8B at 5.6 GB, Devstral at 15.1 GB.
+
+### Notes
+
+- PATCH bump (1.21.2 → 1.21.3) — download-accounting fix + catalog metadata, no dependency changes. **Just run Update.**
+
 ## [1.21.2] — 2026-07-13
 
 ### Fixed — force the classic HTTP downloader (the actual stall cause)

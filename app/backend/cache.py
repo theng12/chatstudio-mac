@@ -145,22 +145,70 @@ def disk_bytes(repo: str) -> int:
 
 
 def incomplete_bytes(repo: str) -> int:
-    """Total bytes currently held by .incomplete partial files."""
+    """Bytes held by `.incomplete` partials, DE-DUPLICATED by target blob.
+
+    A retried/resumed download can leave more than one `.incomplete` for the
+    SAME blob: huggingface_hub names them `<sha>.<etag>.incomplete`, and on a
+    fresh attempt it writes a new `<etag>` temp file instead of resuming the
+    old partial. Summing all of them double-counts — a 2.3 GB model showed
+    "3.0 GB / 2.3 GB, 100%" because two partials of its one 2.26 GB weight
+    file (2.0 GB + 0.9 GB) were both counted. Group by the target-blob SHA
+    (the part before the first dot) and count only the LARGEST partial per
+    blob, which is the furthest-along real download."""
     blobs = repo_cache_dir(repo) / "blobs"
     if not blobs.exists():
         return 0
-    total = 0
+    largest: dict[str, int] = {}
     try:
         for entry in blobs.iterdir():
             if not entry.name.endswith(".incomplete"):
                 continue
+            sha = entry.name.split(".", 1)[0]
             try:
-                total += entry.stat().st_size
+                sz = entry.stat().st_size
             except (FileNotFoundError, PermissionError):
                 continue
+            if sz > largest.get(sha, -1):
+                largest[sha] = sz
     except FileNotFoundError:
         return 0
-    return total
+    return sum(largest.values())
+
+
+def prune_stale_incomplete(repo: str) -> int:
+    """Delete orphaned `.incomplete` partials to reclaim disk and keep the
+    byte accounting honest. Removes: (a) any partial whose target blob is
+    already complete, and (b) all-but-the-largest partial for the same target
+    blob (the leftovers from earlier interrupted attempts). Returns bytes
+    reclaimed. Safe to call right before a download — huggingface_hub resumes
+    from the surviving partial."""
+    blobs = repo_cache_dir(repo) / "blobs"
+    if not blobs.exists():
+        return 0
+    complete: set[str] = set()
+    partials: dict[str, list] = {}
+    try:
+        for entry in blobs.iterdir():
+            if entry.name.endswith(".incomplete"):
+                partials.setdefault(entry.name.split(".", 1)[0], []).append(entry)
+            else:
+                complete.add(entry.name)
+    except FileNotFoundError:
+        return 0
+    reclaimed = 0
+    for sha, files in partials.items():
+        if sha in complete:
+            drop = files                      # blob done → every partial is garbage
+        else:
+            files.sort(key=lambda p: p.stat().st_size if p.exists() else 0, reverse=True)
+            drop = files[1:]                  # keep the furthest-along, drop the rest
+        for p in drop:
+            try:
+                reclaimed += p.stat().st_size
+                p.unlink()
+            except (FileNotFoundError, PermissionError):
+                continue
+    return reclaimed
 
 
 def status_snapshot(repo: str) -> dict:
