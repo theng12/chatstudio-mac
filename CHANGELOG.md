@@ -10,6 +10,12 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.21.2] — 2026-07-13
+
+### Fixed — force the classic HTTP downloader (the actual stall cause)
+
+- Root cause of the "0 B/s forever" stall was **hf_xet**: its native downloader can wedge mid-file without honouring the read timeout, and it holds the blob lock while stuck — so even the retry added in 1.21.1 would have blocked on that lock. Chat Studio now **disables Xet for downloads** (`HF_HUB_DISABLE_XET`) and sets a firm 30s read timeout, so downloads take the classic HTTP path: a stalled read **raises**, releases the lock, and the retry loop resumes from the partial. Slightly slower than Xet, but it never hangs a fleet-wide push. Builds on the watchdog/retry/ETA fixes in 1.21.1.
+
 ## [1.21.1] — 2026-07-13
 
 ### Fixed — model downloads no longer hang forever + sane progress display

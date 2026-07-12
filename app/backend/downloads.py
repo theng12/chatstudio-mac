@@ -28,8 +28,20 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
+import huggingface_hub.constants as _hf_constants
 from huggingface_hub import HfApi, snapshot_download
 from huggingface_hub.utils import HfHubHTTPError
+
+# Force the classic HTTP downloader instead of hf_xet. hf_xet's native download
+# can wedge mid-file WITHOUT honouring the read timeout, and it holds the blob
+# lock while stuck — that's what made a download sit at "0 B/s" forever and made
+# even a retry block on the lock. The HTTP path honours HF_HUB_DOWNLOAD_TIMEOUT,
+# so a stalled read RAISES and our retry loop resumes from the partial. These are
+# read at call time by huggingface_hub, so mutating them here takes effect. A
+# slightly slower download is well worth never hanging a fleet-wide push.
+_hf_constants.HF_HUB_DISABLE_XET = True
+if getattr(_hf_constants, "HF_HUB_DOWNLOAD_TIMEOUT", 0) < 30:
+    _hf_constants.HF_HUB_DOWNLOAD_TIMEOUT = 30
 
 from . import cache, catalog, settings
 
