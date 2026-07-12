@@ -10,6 +10,22 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.21.4] — 2026-07-09
+
+### Added — orphaned download partials are now swept on startup (no re-download needed)
+
+Follow-up to 1.21.3: that release de-duplicated `.incomplete` partials in the byte count and pruned them at the start of the *next* download — but a model that already finished downloading kept its orphan partial indefinitely (harmless, ~0.6 GB wasted) unless you happened to re-download it.
+
+- **New `prune_all_incomplete()` runs once at server startup** (off-thread, can't delay boot): it sweeps every cached repo and deletes orphaned partials — any whose blob is already complete, and non-largest duplicates — while keeping the single furthest-along partial of a genuinely-incomplete blob so a resume still works. Reclaimed bytes are logged.
+
+**What this means for an existing orphan:** the model itself was always fine to use (a leftover `.incomplete` is dead weight next to the completed file, not corruption). Now the leftover is removed automatically the next time the server starts — which an **Update** does — so no manual cleanup or re-download is needed.
+
+Verified: sweep proven on a synthetic multi-repo cache with duplicate partials (reclaims the orphans, keeps the largest); service restarts clean.
+
+### Notes
+
+- PATCH bump (1.21.3 → 1.21.4) — startup cleanup only, no dependency changes. **Just run Update.**
+
 ## [1.21.3] — 2026-07-09
 
 ### Fixed — download progress could read past 100% ("3.0 GB / 2.3 GB"); catalog sizes corrected

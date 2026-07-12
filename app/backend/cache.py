@@ -251,6 +251,34 @@ def list_cached_repos() -> list[str]:
     return sorted(out)
 
 
+def prune_all_incomplete() -> int:
+    """Sweep every cached repo and prune orphaned `.incomplete` partials.
+    Run once at server startup: no download is in flight then, so any partial
+    is a leftover from a previous interrupted session — orphans (blob already
+    complete, or a non-largest duplicate) are safe to delete, while the single
+    furthest-along partial of a genuinely-incomplete blob is kept so a later
+    re-download still resumes. Returns total bytes reclaimed."""
+    d = hub_dir()
+    if not d.exists():
+        return 0
+    reclaimed = 0
+    try:
+        for entry in d.iterdir():
+            if not entry.is_dir() or not entry.name.startswith("models--"):
+                continue
+            parts = entry.name[len("models--"):].split("--")
+            if len(parts) < 2:
+                continue
+            repo = parts[0] + "/" + "--".join(parts[1:])
+            try:
+                reclaimed += prune_stale_incomplete(repo)
+            except Exception:
+                continue
+    except (FileNotFoundError, PermissionError):
+        return reclaimed
+    return reclaimed
+
+
 def ensure_hub_dir() -> Path:
     d = hub_dir()
     d.mkdir(parents=True, exist_ok=True)

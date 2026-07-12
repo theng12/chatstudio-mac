@@ -695,6 +695,21 @@ _IDLE_UNLOAD_SECONDS = 600
 
 
 @app.on_event("startup")
+async def _prune_stale_partials():
+    # Reclaim disk from orphaned .incomplete download partials left by earlier
+    # interrupted sessions. Runs once, off-thread so it can't delay startup.
+    async def _sweep():
+        try:
+            freed = await asyncio.to_thread(cache.prune_all_incomplete)
+            if freed:
+                print(f"[chat studio] pruned {freed / 1e9:.2f} GB of stale "
+                      f"download partials on startup", file=sys.stderr, flush=True)
+        except Exception:
+            pass
+    asyncio.create_task(_sweep())
+
+
+@app.on_event("startup")
 async def _start_idle_unloader():
     async def loop():
         while True:
