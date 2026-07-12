@@ -10,6 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.21.1] — 2026-07-13
+
+### Fixed — model downloads no longer hang forever + sane progress display
+
+- **Auto-recover from stalled downloads.** `huggingface_hub`'s 10s read-timeout does not reliably fire for a Xet-backed download that wedges mid-file (bytes just stop with the socket still notionally alive), so a download could sit at **"0 B/s" forever**. The download manager now runs each attempt under a **progress watchdog**: if no new bytes land on disk for 75s it abandons that attempt and starts a fresh `snapshot_download`, which **resumes from the partial** (hf's `.locks/` coordinate). Bounded retries with backoff (up to 8) also recover transient connection/Xet errors — all without user action. Cancel stays responsive throughout.
+- **No more absurd ETA.** The ETA used a decaying EMA speed with a `> 0` guard, but the EMA never reaches exactly 0 when bytes stop, so it divided a multi‑GB remainder by ~1e‑81 and showed **"ETA 1.6e+32h"**. ETA now requires a real speed floor (≥1 KB/s) and is hidden while stalled; a **"stalled — retrying (attempt N)"** indicator shows instead.
+- Job status now includes `stalled`, `attempt`, and `retry_reason` for the UI. No new dependencies — **just Update**.
+
 ## [1.21.0] — 2026-07-12
 
 ### Added — secure fleet access and capability contract

@@ -33,6 +33,19 @@ from huggingface_hub.utils import HfHubHTTPError
 
 from . import cache, catalog, settings
 
+# Stall recovery. huggingface_hub's own 10s read-timeout does NOT reliably fire
+# for a Xet-backed download that wedges mid-file (bytes just stop arriving with
+# the socket still notionally alive), so a download could sit at "0 B/s" forever.
+# We watch on-disk progress and, if no new bytes land for STALL_TIMEOUT, abandon
+# that attempt and start a fresh snapshot_download — which RESUMES from the
+# partial (hf's `.locks/` coordinate with any abandoned worker). Bounded retries
+# with backoff also recover transient connection/Xet errors automatically.
+STALL_TIMEOUT = 75.0        # no new bytes for this long → abandon attempt + retry
+STALL_UI_SECONDS = 20.0     # surface "stalled" in the UI a bit before we retry
+MAX_ATTEMPTS = 8            # give up (state=error) only after this many attempts
+SPEED_FLOOR_BPS = 1024.0    # below ~1 KB/s, show no ETA (the decaying EMA never
+                            # hits exactly 0, so ">0" alone yields absurd ETAs)
+
 
 def _matches_any(path: str, patterns: tuple[str, ...]) -> bool:
     """fnmatch with extra love: a pattern of 'foo/*' should match
@@ -59,10 +72,15 @@ class DownloadJob:
     finished_at: Optional[float] = None
     cancel_event: threading.Event = field(default_factory=threading.Event)
     thread: Optional[threading.Thread] = None
+    attempt: int = 0                        # current download attempt (1-based)
+    retry_reason: Optional[str] = None      # why the last attempt was retried
     # Sliding-window byte-rate, smoothed with an EMA so the UI doesn't
     # oscillate when chunks land in bursts.
     _last_speed_sample: Optional[tuple[float, int]] = field(default=None, repr=False)
     _speed_bps: float = field(default=0.0, repr=False)
+    # Wall-clock of the last time on-disk bytes actually grew — drives stall
+    # detection (set by the progress watchdog, read by serialize()).
+    _last_progress_at: Optional[float] = field(default=None, repr=False)
 
     def serialize(self) -> dict:
         bytes_done = cache.disk_bytes(self.repo)
@@ -95,21 +113,27 @@ class DownloadJob:
         elif self.state == "done":
             percent = 100.0
 
-        # ETA: remaining bytes at current speed. Only show when speed is
-        # nonzero and there's a known total.
+        # Stalled = running but on-disk bytes haven't grown for a while (a wedged
+        # connection, or the pause between a failed attempt and its retry).
+        stalled = (
+            self.state == "running"
+            and self._last_progress_at is not None
+            and (now - self._last_progress_at) > STALL_UI_SECONDS
+        )
+
+        # ETA: remaining bytes at current speed. Only show once we have a
+        # meaningful, sustained rate — NOT while stalled, and NOT below a floor.
         #
-        # Also require a few seconds of runtime first: right after a download
-        # starts, snapshot_download() is often still resolving repo metadata
-        # before any real bytes land, so the very first EMA sample can be a
-        # near-zero "instant" speed (e.g. 1.57 KB observed over ~3 sec). That
-        # single noisy sample, divided into a multi-GB remaining total,
-        # produces an absurd ETA ("ETA 99679m 03s" seconds after clicking
-        # Download). Waiting until the EMA has had a few real 1-second update
-        # cycles lets it settle to a representative speed first.
+        # The old guard was `_speed_bps > 0`, but the EMA (0.3*new + 0.7*old)
+        # only DECAYS toward zero when no bytes arrive — it never reaches exactly
+        # 0 — so a stalled download kept `> 0` true and divided a multi-GB
+        # remainder by ~1e-81, yielding the absurd "ETA 1.6e+32h". Requiring a
+        # real floor (and !stalled) makes a wedged download show no ETA instead.
         eta_seconds = None
         if (
             self.state == "running"
-            and self._speed_bps > 0
+            and not stalled
+            and self._speed_bps >= SPEED_FLOOR_BPS
             and self.total_bytes > 0
             and self.started_at is not None
             and now - self.started_at >= 3.0
@@ -129,6 +153,9 @@ class DownloadJob:
             "percent": percent,
             "speed_bps": self._speed_bps,
             "eta_seconds": eta_seconds,
+            "stalled": stalled,
+            "attempt": self.attempt,
+            "retry_reason": self.retry_reason,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
         }
@@ -265,62 +292,126 @@ class DownloadManager:
             total += self._companion_bytes(c["repo"], c.get("allow_patterns"), job.token)
         job.total_bytes = total
         cache.ensure_hub_dir()
+        # If the user didn't pass a per-download token, fall back to the global
+        # token from Settings — useful for gated repos and higher rate limits.
+        effective_token = job.token or settings.get_hf_token()
+        ignore = catalog.ignore_patterns_for(job.repo)
         print(
             f"[downloads] starting {job.repo}  "
             f"(job={job.job_id}, total={job.total_bytes / 1e9:.2f} GB"
             f"{', +' + str(len(companions)) + ' companion(s)' if companions else ''})",
             flush=True,
         )
-
         try:
-            # cache_dir omitted on purpose — honours HF_HOME from env.
-            # resume is automatic in huggingface_hub 0.27+; the explicit
-            # resume_download kwarg was removed in 1.0.
-            # If the user didn't pass a per-download token, fall back to the
-            # global token from Settings — useful for gated repos and higher
-            # rate limits.
-            effective_token = job.token or settings.get_hf_token()
-            ignore = catalog.ignore_patterns_for(job.repo)
-            snapshot_download(
-                repo_id=job.repo,
-                token=effective_token,
-                ignore_patterns=list(ignore) if ignore else None,
-            )
-            if not job.cancel_event.is_set():
-                for c in companions:
-                    allow = c.get("allow_patterns")
-                    print(
-                        f"[downloads] companion {c['repo']} "
-                        f"({c.get('label', 'helper model')}) for {job.repo}",
-                        flush=True,
-                    )
-                    snapshot_download(
-                        repo_id=c["repo"],
-                        token=effective_token,
-                        allow_patterns=list(allow) if allow else None,
-                    )
-                    if job.cancel_event.is_set():
-                        break
-            if job.cancel_event.is_set():
-                job.state = "cancelled"
-                print(f"[downloads] cancelled {job.repo}", flush=True)
-            else:
-                job.state = "done"
-                print(f"[downloads] done {job.repo}", flush=True)
-        except Exception as e:
-            if job.cancel_event.is_set():
-                job.state = "cancelled"
-                print(f"[downloads] cancelled (during exception) {job.repo}", flush=True)
-            else:
-                job.state = "error"
-                job.error = f"{type(e).__name__}: {e}"
-                print(f"[downloads] error {job.repo}: {job.error}", file=sys.stderr, flush=True)
-                traceback.print_exc()
+            self._download_with_retries(job, companions, effective_token, ignore)
         finally:
             job.finished_at = time.time()
             with self._lock:
                 if self._active_by_repo.get(job.repo) == job.job_id:
                     self._active_by_repo.pop(job.repo, None)
+
+    def _download_with_retries(self, job, companions, token, ignore) -> None:
+        """Run snapshot_download, recovering from wedged/failed attempts. Each
+        attempt runs in a worker thread watched for on-disk progress; a stalled
+        or failed attempt is retried (resume continues from the partial)."""
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            if job.cancel_event.is_set():
+                job.state = "cancelled"
+                print(f"[downloads] cancelled {job.repo}", flush=True)
+                return
+            job.attempt = attempt
+            result: dict = {"error": None}
+            worker = threading.Thread(
+                target=self._attempt_download,
+                args=(job, companions, token, ignore, result),
+                name=f"dl-worker-{job.repo}-{attempt}", daemon=True,
+            )
+            worker.start()
+            wedged = self._watch_progress(job, worker)
+
+            if job.cancel_event.is_set():
+                job.state = "cancelled"
+                print(f"[downloads] cancelled {job.repo}", flush=True)
+                return
+            if not worker.is_alive():
+                # worker returned — either success or it raised
+                if result["error"] is None:
+                    job.state = "done"
+                    job.retry_reason = None
+                    print(f"[downloads] done {job.repo}"
+                          f"{f' (after {attempt} attempts)' if attempt > 1 else ''}",
+                          flush=True)
+                    return
+                reason = result["error"]
+            else:
+                # wedged: leave the abandoned worker running as a daemon — hf's
+                # `.locks/` keep the resume safe and it dies on its own timeout.
+                reason = f"stalled — no data for {int(STALL_TIMEOUT)}s"
+
+            job.retry_reason = reason
+            if attempt >= MAX_ATTEMPTS:
+                job.state = "error"
+                job.error = reason
+                print(f"[downloads] error {job.repo} after {attempt} attempts: {reason}",
+                      file=sys.stderr, flush=True)
+                return
+
+            backoff = min(5 * attempt, 30)
+            print(f"[downloads] {job.repo} attempt {attempt} failed ({reason}); "
+                  f"resuming in {backoff}s", flush=True)
+            # interruptible backoff so Cancel stays responsive
+            for _ in range(int(backoff * 2)):
+                if job.cancel_event.is_set():
+                    job.state = "cancelled"
+                    print(f"[downloads] cancelled {job.repo}", flush=True)
+                    return
+                time.sleep(0.5)
+
+    def _watch_progress(self, job: DownloadJob, worker: threading.Thread) -> bool:
+        """Wait for the worker, tracking on-disk progress. Returns True if the
+        attempt wedged (no new bytes for STALL_TIMEOUT) so the caller retries."""
+        last_observed = -1
+        last_progress_at = time.time()
+        job._last_progress_at = last_progress_at
+        while worker.is_alive():
+            if job.cancel_event.is_set():
+                return False
+            observed = cache.disk_bytes(job.repo) + cache.incomplete_bytes(job.repo)
+            now = time.time()
+            if observed > last_observed:
+                last_observed = observed
+                last_progress_at = now
+                job._last_progress_at = now
+            elif now - last_progress_at > STALL_TIMEOUT:
+                return True  # wedged → abandon this attempt
+            worker.join(timeout=2.0)
+        return False
+
+    def _attempt_download(self, job, companions, token, ignore, result: dict) -> None:
+        """One snapshot_download pass (main repo + any companions). Records the
+        exception message in result['error']; None means success. cache_dir is
+        omitted on purpose so HF_HOME from env is honoured; resume is automatic."""
+        try:
+            snapshot_download(
+                repo_id=job.repo,
+                token=token,
+                ignore_patterns=list(ignore) if ignore else None,
+            )
+            for c in companions:
+                if job.cancel_event.is_set():
+                    break
+                allow = c.get("allow_patterns")
+                print(f"[downloads] companion {c['repo']} "
+                      f"({c.get('label', 'helper model')}) for {job.repo}", flush=True)
+                snapshot_download(
+                    repo_id=c["repo"],
+                    token=token,
+                    allow_patterns=list(allow) if allow else None,
+                )
+        except Exception as e:
+            result["error"] = f"{type(e).__name__}: {e}"
+            if not job.cancel_event.is_set():
+                traceback.print_exc()
 
 
 manager = DownloadManager()

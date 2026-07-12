@@ -439,8 +439,10 @@
               <div class="dl-stats" x-show="j.state === 'running'">
                 <span class="dl-stat" x-text="formatBytes(j.bytes_observed) + ' / ' + formatBytes(j.bytes_total)"></span>
                 <span class="dl-stat" x-text="(j.percent || 0).toFixed(1) + '%'"></span>
-                <span class="dl-stat" x-show="j.speed_bps > 0" x-text="formatBytes(j.speed_bps) + '/s'"></span>
-                <span class="dl-stat" x-show="j.eta_seconds" x-text="'ETA ' + formatDuration(j.eta_seconds)"></span>
+                <span class="dl-stat" x-show="j.speed_bps >= 1024 && !j.stalled" x-text="formatBytes(j.speed_bps) + '/s'"></span>
+                <span class="dl-stat" x-show="j.eta_seconds && !j.stalled" x-text="'ETA ' + formatDuration(j.eta_seconds)"></span>
+                <span class="dl-stat warn" x-show="j.stalled" x-text="j.attempt > 1 ? ('stalled — retrying (attempt ' + j.attempt + ')') : 'stalled — reconnecting…'"></span>
+                <span class="dl-stat faint" x-show="!j.stalled && j.attempt > 1" x-text="'attempt ' + j.attempt"></span>
               </div>
               <div class="dl-stats" x-show="j.state === 'queued'">
                 <span class="dl-stat faint">Waiting…</span>
