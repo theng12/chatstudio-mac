@@ -157,18 +157,19 @@ class LoadedModel:
 
 def is_vision_model(repo: str) -> bool:
     """True if `repo` is a vision-language model that must load through mlx-vlm
-    instead of mlx-lm. Checks the catalog's `is_vision` flag first (fast, no
-    disk read), then falls back to inspecting the cached config.json for a
-    `vision_config` / *ForConditionalGeneration architecture — so a VLM the
-    user downloaded via Hub search (not in the catalog) is still detected."""
+    instead of mlx-lm. An explicit catalog flag is fast, but curated text
+    entries are still checked against cached config.json so metadata cannot
+    hide a real vision architecture."""
     try:
         from . import catalog
         for m in catalog.CATALOG:
+            if m.repo == repo and getattr(m, "is_vision", False):
+                return True
             if m.repo == repo:
-                return bool(getattr(m, "is_vision", False))
+                break
     except Exception:
         pass
-    # Not in catalog — sniff the downloaded config.json under the HF snapshot.
+    # Sniff the downloaded config.json under the HF snapshot.
     try:
         import json
         snaps = cache.repo_cache_dir(repo) / "snapshots"

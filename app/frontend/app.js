@@ -78,7 +78,7 @@ function studio() {
     sessions: [],
     sessionSearch: "",
     currentSessionId: null,
-    showSidebar: true,
+    showSidebar: window.innerWidth > 700,
 
     // ── transient toast + idle-unload tracking ──
     toast: "",
@@ -685,16 +685,20 @@ function studio() {
     async renameSession(s) {
       const t = prompt("Rename chat:", s.title || "");
       if (t === null) return;
-      await fetch(`${this.apiBase}/api/sessions/${s.id}/rename`, {
+      const r = await fetch(`${this.apiBase}/api/sessions/${s.id}/rename`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ title: t }),
       }).catch(() => {});
+      if (!r || !r.ok) { this.showToast("Could not rename chat"); return; }
+      this.showToast("Chat renamed");
       await this.refreshSessions();
     },
     async deleteSession(s) {
       if (!confirm(`Delete "${s.title || 'this chat'}"?`)) return;
-      await fetch(`${this.apiBase}/api/sessions/${s.id}`, { method: "DELETE" }).catch(() => {});
+      const r = await fetch(`${this.apiBase}/api/sessions/${s.id}`, { method: "DELETE" }).catch(() => {});
+      if (!r || !r.ok) { this.showToast("Could not delete chat"); return; }
       if (s.id === this.currentSessionId) { this.currentSessionId = null; this.messages = []; }
+      this.showToast("Chat deleted");
       await this.refreshSessions();
     },
     sessionModelShort(repo) {
@@ -910,7 +914,12 @@ function studio() {
       if (this._abort) try { this._abort.abort(); } catch (e) {}
     },
     scrollThread() {
-      this.$nextTick(() => { const el = this.$refs.thread; if (el) el.scrollTop = el.scrollHeight; });
+      this.$nextTick(() => {
+        const el = this.$refs.thread;
+        if (!el) return;
+        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+        if (nearBottom) el.scrollTop = el.scrollHeight;
+      });
     },
     shortName(repo) {
       const m = this.chatModels.find(x => x.repo === repo);
@@ -1228,8 +1237,7 @@ console.log(data.choices[0].message.content);`;
     // ════════════ formatting helpers ════════════
     formatBytes(b) {
       // Decimal (SI, ÷1000) — NOT binary ÷1024. Must match the catalog's
-      // static `size_gb` values (estimated via the "~0.5-0.7 GB per billion
-      // params" decimal rule in catalog.py) and Hugging Face's own byte
+      // static `size_gb` values and Hugging Face's own byte
       // counts, or live download progress visibly disagrees with the "X GB"
       // size shown before downloading — e.g. a real 4.3 GB (decimal) model
       // would cap out at "~4.0 GB" downloaded if divided by 1024^3 instead
@@ -1242,6 +1250,10 @@ console.log(data.choices[0].message.content);`;
       let v = b;
       while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
       return v.toFixed(i === 0 ? 0 : 1) + " " + units[i];
+    },
+    formatGb(gb) {
+      const n = Number(gb);
+      return Number.isFinite(n) ? n.toFixed(2) + " GB" : "—";
     },
     formatNumber(n) {
       return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(Number(n) || 0);

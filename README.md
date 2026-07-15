@@ -6,17 +6,9 @@ Chat Studio replaces juggling LM Studio as a second always-on app: it runs as a 
 
 ## What it does
 
-- **Catalog of 19 MLX-ready instruction-tuned chat models** across 8 families, all pre-quantized by the `mlx-community` Hugging Face org — no conversion step needed:
-  - **Llama** (3.2 3B — recommended starter, 3.1 8B)
-  - **Qwen** (2.5 7B, 2.5 14B, 2.5 Coder 7B)
-  - **Gemma 4** (E2B, E4B, 12B, 26B-A4B MoE, 31B — Google's April 2026 release, QAT 4-bit)
-  - **Gemma 3** (1B, 4B, 12B, 27B — QAT 4-bit)
-  - **Gemma 2** (2B, 9B Instruct)
-  - **Mistral** (7B Instruct v0.3)
-  - **Phi** (3.5 Mini Instruct)
-  - **DeepSeek** (R1 Distill Qwen 7B — reasoning)
+- **Catalog of 46 verified MLX-ready instruction-tuned chat models** across 14 families, all pre-quantized by the `mlx-community` Hugging Face org — no conversion step needed. The catalog spans everyday assistants, fast/low-memory models, coding and reasoning, multilingual/Khmer-capable Qwen models, creative writing, long-context work, and vision/document-capable families.
 
-  > Gemma 3 and Gemma 4 are multimodal upstream; Chat Studio runs them as **text-only** chat (image/audio input isn't exposed in this UI). The Gemma entries use Google's **QAT** (quantization-aware-trained) 4-bit builds for near-full-precision quality, and their listed sizes are **real on-disk totals** from Hugging Face, not estimates.
+  > Vision entries are dispatched through `mlx-vlm` and are labelled in the Models tab. The Gemma 3 1B entry is text-only; Gemma 3 4B/12B/27B, Gemma 4, Qwen3.5, Mistral Small 3.1, and Llama 4 Scout expose vision only when the installed processor supports the downloaded snapshot. Sizes are verified decimal totals for the current Hugging Face repository snapshots, including tokenizer, processor, config, and weight shards.
 - **Chat tab** — pick a downloaded model from the dropdown (it loads on selection; only one model is kept in unified memory at a time) and chat. Responses **stream token-by-token** with Markdown/code rendering, a **Stop** button, and an inline **Params** popover (temperature, max tokens, top-p). A per-model **fit chip** flags whether a model comfortably fits your Mac's unified memory.
 - **Settings tab** — a system prompt and generation defaults (saved in your browser), Hugging Face token with a **Test** button, an MLX engine-diagnostics panel, and server/connectivity info.
 - **API tab** — your OpenAI-compatible base URL with one-click copy, the LAN/Tailscale URLs to reach it from other devices, and ready-to-paste **cURL / Python / JavaScript** snippets pre-filled with your loaded model.
@@ -39,7 +31,7 @@ Current version is stored at the project root in [`VERSION`](VERSION).
 
 The WebUI footer shows the running version. The same value is also surfaced at:
 
-- `GET /api/version` → `{"app_version": "1.0.0", "title": "Chat Studio KH"}`
+- `GET /api/version` → the current `VERSION` value and title
 - `GET /api/health` → includes `app_version`
 - `GET /api/chat/diagnostics` → includes `app_version`
 
@@ -129,7 +121,7 @@ curl -N -X POST http://localhost:47871/api/chat/completions \
 
 ### OpenAI-compatible API (`/v1`)
 
-Point any OpenAI-client tool (Continue.dev, Open WebUI, the `openai` Python SDK, etc.) at `http://localhost:47871/v1` as the base URL. No API key is required (any non-empty string will satisfy clients that require one).
+Point local OpenAI-client tools at `http://localhost:47871/v1` as the base URL. Loopback requests are open for local use. Remote requests require the configured `X-Studio-Token` header (or `Authorization: Bearer …`); never put a token in a URL query string.
 
 ```bash
 # List models (only models currently cached on disk are listed)
@@ -227,7 +219,7 @@ The service files ship inside this launcher, so on each Mac you just click **Ins
 
 ## Sizing note
 
-Catalog `size_gb` values are **approximate** — derived from the well-known public rule of thumb for 4-bit quantization (~0.5–0.7 GB per billion parameters), not verified against the live Hugging Face API per entry. They're good enough for the UI's download-size hint and hardware-fit calculation, but the actual `/api/cache` and `/api/downloads` endpoints report the real on-disk bytes once a model is downloaded — treat the catalog number as an estimate, not a guarantee.
+Catalog `size_gb` values are **verified decimal repository totals** from the release audit's Hugging Face file metadata snapshot. They include weights and companion files; the live `/api/cache` and `/api/downloads` endpoints report actual on-disk bytes after download.
 
 ## License
 

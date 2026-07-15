@@ -238,7 +238,31 @@ button.link.danger:hover { background: rgba(255,107,107,.12); }
   box-shadow: 0 10px 30px rgba(0,0,0,.5);
 }
 @media (max-width: 700px) {
+  .topbar {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px; padding: 8px 12px;
+  }
+  .brand { min-width: 0; }
+  .brand-tag { display: none; }
+  .tabs {
+    grid-column: 1 / -1; min-width: 0; width: 100%; margin: 0;
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: none; padding: 6px 11px; }
+  .status { margin-left: 0; }
   .chat-sidebar { position: absolute; z-index: 12; height: 100%; box-shadow: 6px 0 24px rgba(0,0,0,.5); }
+  .chat-head { padding: 9px 12px; gap: 8px; flex-wrap: wrap; }
+  .chat-head .model-select { order: 3; width: 100%; flex: 1 1 100%; gap: 6px; }
+  .modeltabs { max-width: 100%; }
+  .modeltabs button { padding-left: 6px; padding-right: 6px; font-size: 11px; }
+  .chat-head select { flex: 1; min-width: 0; max-width: none; }
+  .chat-head .spacer { display: none; }
+  .chat-head .mem-pill, .chat-head > button[title*="Unload"] { display: none; }
+  .composer { padding: 10px 12px; }
+  .composer-hint { margin-top: 6px; }
+  .thread-inner { padding: 0 12px; }
+  .bubble { max-width: 88%; }
 }
 
 .chat-head {

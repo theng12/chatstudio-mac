@@ -36,6 +36,14 @@ class FleetAuthTests(unittest.TestCase):
             self.assertEqual(accepted.get("/api/catalog").status_code, 200)
             self.assertEqual(stale.get("/api/catalog").status_code, 401)
 
+    def test_query_string_tokens_are_not_accepted(self):
+        request = SimpleNamespace(
+            headers={},
+            cookies={},
+            query_params={"token": FLEET_TOKEN},
+        )
+        self.assertIsNone(fleet_auth._presented(request))
+
 
 if __name__ == "__main__":
     unittest.main()

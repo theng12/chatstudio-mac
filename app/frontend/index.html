@@ -369,10 +369,10 @@
                   <article class="variant-row" :class="{cached:m.cache.state==='cached',partial:m.cache.state==='partial'}">
                     <div class="variant-identity">
                       <div class="variant-title-line"><h3 x-text="m.label"></h3><span class="variant-role" x-text="modelRole(m)"></span></div>
-                      <div class="variant-capabilities"><span x-text="m.cache.state==='cached'?'Downloaded':(m.cache.state==='partial'?'Partial':'Available')"></span><span>Apple MLX</span></div>
+                      <div class="variant-capabilities"><span x-text="m.cache.state==='cached'?'Downloaded':(m.cache.state==='partial'?'Partial':'Available')"></span><span x-text="m.is_vision ? 'MLX vision' : 'Apple MLX'"></span></div>
                     </div>
                     <div class="variant-spec" data-label="Parameters"><strong x-text="m.params_b+'B · '+m.quant"></strong><small x-text="modelRole(m)+' tuned'"></small></div>
-                    <div class="variant-spec" data-label="Download"><strong x-text="m.size_gb+' GB'"></strong><small x-text="m.size_gb_approximate?'estimated':'on disk'"></small></div>
+                    <div class="variant-spec" data-label="Download"><strong x-text="formatGb(m.size_gb)"></strong><small x-text="m.size_gb_approximate?'estimated':'verified snapshot'"></small></div>
                     <div class="variant-spec" data-label="Memory"><strong x-text="'≥'+m.min_unified_memory_gb+' GB'"></strong><small class="fit-dot" :class="'fit-'+fitFor(m.min_unified_memory_gb).state" :title="fitFor(m.min_unified_memory_gb).hint" x-text="fitFor(m.min_unified_memory_gb).label"></small></div>
                     <div class="variant-action">
                       <button class="primary small" x-show="m.cache.state==='cached'" @click="loadFromModels(m.repo)">Chat</button>

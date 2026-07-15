@@ -57,10 +57,11 @@ def _presented(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
+    # Query-string tokens leak through access logs, browser history, and
+    # referrers. Remote clients must use the header-based API contract.
     return (request.headers.get("x-studio-token") or
             request.headers.get("x-hub-token") or
-            request.cookies.get(COOKIE_NAME) or
-            request.query_params.get("token"))
+            request.cookies.get(COOKIE_NAME))
 
 
 def make_middleware(token: str):

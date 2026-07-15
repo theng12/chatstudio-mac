@@ -10,6 +10,17 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.21.6] — 2026-07-15
+
+### Production audit — catalog truth, VLM dispatch, auth, and chat UX
+
+- Reconciled all 46 catalog entries against current Hugging Face repository metadata: exact decimal download totals, companion-file coverage, family labels, and Apple Silicon memory floors. No cached model files were deleted.
+- Corrected multimodal dispatch for Llama 4 Scout, Mistral Small 3.1, Gemma 3/4, and Qwen3.5 so supported snapshots use `mlx-vlm`; cached config inspection remains a safety net for downloaded models.
+- Removed query-string fleet-token authentication to prevent secrets leaking into logs, browser history, and referrers. Header and cookie authentication remain supported, with regression coverage.
+- Added visible rename/delete success and failure feedback, preserved the reader's scroll position during streaming, and labelled verified model sizes and VLM entries in the Models tab.
+- Added catalog integrity and vision-metadata regression tests. Cached local generation smoke tests completed for Llama 3.2 3B, Gemma 3 4B, and Gemma 4 E2B with sequential unloads/model switching. Vision image input for uncached multimodal entries was not downloaded or physically tested to avoid an unnecessary multi-GB download.
+- No dependency changes were needed; the existing locked MLX/MLX-LM/MLX-VLM stack passed import and integrity checks. Existing FastAPI lifespan and TestClient deprecation warnings remain third-party/project modernization follow-ups.
+
 ## [1.21.5] — 2026-07-13
 
 ### Fixed — saved fleet credentials apply without restarting Chat Studio
