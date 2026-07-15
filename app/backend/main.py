@@ -24,6 +24,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -39,6 +40,8 @@ from pydantic import BaseModel, Field, field_validator
 from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions
 from .downloads import manager
 from .fleet_auth import load_token as load_fleet_token, make_middleware as fleet_middleware, manifest
+from .auto_update import UpdateError
+from .auto_update_config import create_updater
 
 
 # ───────────── App release version ─────────────
@@ -103,6 +106,31 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class ChatActivityMiddleware:
+    """Count complete chat responses, including the lifetime of streams."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        track = (scope.get("type") == "http" and scope.get("method") == "POST" and
+                 scope.get("path") in {"/api/chat/completions", "/v1/chat/completions"})
+        if track:
+            with _CHAT_ACTIVITY_LOCK:
+                global _CHAT_ACTIVITY
+                _CHAT_ACTIVITY += 1
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            if track:
+                with _CHAT_ACTIVITY_LOCK:
+                    _CHAT_ACTIVITY = max(0, _CHAT_ACTIVITY - 1)
+
+
+_CHAT_ACTIVITY_LOCK = threading.Lock()
+_CHAT_ACTIVITY = 0
+
+
+app.add_middleware(ChatActivityMiddleware)
 app.add_middleware(NoCacheStaticMiddleware)
 FLEET_TOKEN = load_fleet_token()
 app.middleware("http")(fleet_middleware(FLEET_TOKEN))
@@ -119,6 +147,17 @@ class SettingsBody(BaseModel):
     hf_token: Optional[str] = None
     uninterrupted_mode: Optional[bool] = None
     request_timeout: Optional[int] = Field(None, ge=5, le=300)
+
+
+class AutoUpdateSettingsBody(BaseModel):
+    mode: str
+    frequency: str
+    maintenance_hour: int
+    idle_only: bool = True
+
+
+class AutoUpdateRequestBody(BaseModel):
+    after_current: bool = False
 
 
 class TokenTestBody(BaseModel):
@@ -197,6 +236,22 @@ class OpenAIChatCompletionsBody(BaseModel):
     max_tokens: int = Field(1024, ge=1, le=32768)
     top_p: float = Field(1.0, gt=0.0, le=1.0)
     stream: bool = False
+
+
+def _automatic_update_blockers() -> list[str]:
+    reasons: list[str] = []
+    with _CHAT_ACTIVITY_LOCK:
+        if _CHAT_ACTIVITY:
+            reasons.append("a chat response is queued or streaming")
+    if llm_engine.manager.is_busy() and not reasons:
+        reasons.append("a model is loading or generating")
+    states = {str(job.state) for job in manager.list_jobs()}
+    if states & {"queued", "running", "paused", "cancelling"}:
+        reasons.append("a model download is active")
+    return reasons
+
+
+auto_updater = create_updater(readiness=_automatic_update_blockers)
 
 
 # ───────────── API: meta ─────────────
@@ -284,6 +339,48 @@ def app_release_version() -> dict:
         "app_version": APP_VERSION,
         "title": app.title,
     }
+
+
+@app.get("/api/auto-update/status")
+def automatic_update_status() -> dict:
+    return auto_updater.public_status()
+
+
+@app.get("/api/auto-update/readiness")
+def automatic_update_readiness() -> dict:
+    return auto_updater.readiness_status()
+
+
+@app.post("/api/auto-update/settings")
+def automatic_update_settings(body: AutoUpdateSettingsBody) -> dict:
+    try:
+        return auto_updater.save_settings(body.model_dump())
+    except UpdateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auto-update/check")
+def automatic_update_check() -> dict:
+    try:
+        return auto_updater.trigger_check()
+    except UpdateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/auto-update/update")
+def automatic_update_run(body: AutoUpdateRequestBody) -> dict:
+    try:
+        return auto_updater.trigger_update(after_current=body.after_current)
+    except UpdateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/auto-update/retry")
+def automatic_update_retry() -> dict:
+    try:
+        return auto_updater.retry()
+    except UpdateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/api/system")

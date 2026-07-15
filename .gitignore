@@ -12,6 +12,9 @@ app/.pinokio-temp/
 # Per-machine launchd startup-service marker (install_service.sh)
 service/
 
+# Per-machine automatic-update configuration, locks, and status
+auto_update/
+
 # AI agent/IDE config — workstation-specific
 .clinerules
 .cursorrules
@@ -21,5 +24,4 @@ AGENTS.md
 CLAUDE.md
 GEMINI.md
 QWEN.md
-
 

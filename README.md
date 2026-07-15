@@ -25,6 +25,26 @@ Chat Studio replaces juggling LM Studio as a second always-on app: it runs as a 
 4. Switch to **Chat**, click **load** next to the model, and start chatting.
 5. (Optional) Click **Install as Startup Service** in the sidebar to run Chat Studio as an always-on background service instead of manually starting it each time — see "Run as an always-on server" below.
 
+## Automatic updates (optional)
+
+Open **Settings → Automatic updates** and choose Off (the default), Notify only,
+or Download and install automatically. Checks can run daily or weekly at the
+selected maintenance hour; Chat Studio defaults to the family’s staggered 03:00
+slot. Saving reports success only after the LaunchAgent is actually validated.
+
+Keep **Update only while idle** enabled. Active local or cloud conversations,
+response streams, queued/model-loading MLX work, and model downloads defer the
+install without cancelling user work. **Update after current work** creates a
+one-time retry even when the regular mode is Off.
+
+The helper accepts only the expected GitHub origin and `main`, requires a clean
+fast-forward and free disk space, installs dependencies, verifies imports, and
+confirms both health and the running version/build. It never discards local
+changes. Failure makes one bounded rollback attempt and reports the outcome.
+Rotated technical logs are under `logs/auto_update/`; switching Off unloads and
+removes the schedule immediately. Fix any named Git/service issue and use Retry
+if the panel enters a Repair/failed state.
+
 ## Versioning
 
 Current version is stored at the project root in [`VERSION`](VERSION).
@@ -34,6 +54,12 @@ The WebUI footer shows the running version. The same value is also surfaced at:
 - `GET /api/version` → the current `VERSION` value and title
 - `GET /api/health` → includes `app_version`
 - `GET /api/chat/diagnostics` → includes `app_version`
+- `GET /api/auto-update/status` → updater settings and redacted state
+- `GET /api/auto-update/readiness` → idle state and active-work reasons
+- `POST /api/auto-update/settings` → save and validate the opt-in schedule
+- `POST /api/auto-update/check` → safe version check
+- `POST /api/auto-update/update` → update now or `{"after_current":true}`
+- `POST /api/auto-update/retry` → retry a failed update
 
 ## API
 

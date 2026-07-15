@@ -10,6 +10,37 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.22.0] — 2026-07-15
+
+### Added — safe optional automatic updates
+
+- Settings now offers Off, Notify only, and automatic-install modes with daily
+  or weekly checks, a staggered 03:00 maintenance hour, and idle-only protection.
+  The default remains Off and saving validates the LaunchAgent separately.
+- Added installed/latest versions, last/next checks, live updater states, defer
+  reasons, results, retry, Check now, Update now, Update after current work,
+  release notes, and technical details.
+- A short-lived launchd helper works without an open browser. Chat responses,
+  streams, MLX model loading/generation, and downloads all block installation.
+
+### Safety and recovery
+
+- Every install requires the fixed origin, `main`, a clean fast-forward, enough
+  disk space, dependency and import checks, healthy restart, and the expected
+  version/build. Dirty, detached, divergent, rewritten, or unexpected repos are
+  refused without changing files.
+- Service and Pinokio Start modes are restarted independently, a per-app lock
+  prevents update races, and one bounded rollback attempt restores matching
+  requirements and verifies the previous healthy version after failure.
+- Logs rotate under `logs/auto_update/`, secrets are redacted, duplicate agents
+  cannot accumulate, and Reset unloads/removes the updater before the environment.
+
+### Verified
+
+- Added 19 focused safety tests and passed a real launchd enable/validate/disable
+  cycle. Full tests, compilation, JavaScript/launcher parsing, dependency checks,
+  isolated API health, and desktop/compact browser QA passed.
+
 ## [1.21.6] — 2026-07-15
 
 ### Production audit — catalog truth, VLM dispatch, auth, and chat UX

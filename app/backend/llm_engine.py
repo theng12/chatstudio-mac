@@ -212,6 +212,7 @@ class LLMManager:
         # Set to request the in-flight generation stop early (Stop button /
         # client disconnect). Checked each token by the generation loop.
         self._cancel = threading.Event()
+        self._busy = threading.Event()
         # Memory management: when the loaded local model sits unused (e.g. the
         # user switched to a cloud model), free it after an idle timeout.
         self._last_used: float = 0.0
@@ -228,6 +229,10 @@ class LLMManager:
 
     def last_auto_unload(self) -> Optional[dict]:
         return self._last_auto_unload
+
+    def is_busy(self) -> bool:
+        """True while a model load or queued/running generation owns MLX."""
+        return self._busy.is_set()
 
     def unload_if_idle(self, threshold_seconds: float) -> Optional[str]:
         """Unload the model if it's been idle longer than the threshold. Runs on
@@ -266,7 +271,11 @@ class LLMManager:
     def load(self, repo: str) -> dict:
         """Load `repo` into memory (unloading any previous model first). Runs on
         the dedicated MLX worker thread; blocks the caller until done."""
-        return self._exec.submit(self._load_sync, repo).result()
+        self._busy.set()
+        try:
+            return self._exec.submit(self._load_sync, repo).result()
+        finally:
+            self._busy.clear()
 
     def ensure_loaded(self, repo: Optional[str]) -> str:
         """Make `repo` the active model, loading it on demand if it's cached but
@@ -526,6 +535,7 @@ class LLMManager:
                     except Exception:
                         pass
 
+        self._busy.set()
         future = self._exec.submit(_generate)
         try:
             while True:
@@ -546,7 +556,10 @@ class LLMManager:
             # Make sure the worker stops and finishes, freeing the single worker
             # thread for the next request (and propagating any failure).
             self._cancel.set()
-            future.result()
+            try:
+                future.result()
+            finally:
+                self._busy.clear()
 
     def chat_once(
         self,
