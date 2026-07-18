@@ -10,6 +10,25 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.22.1] — 2026-07-18
+
+### Fixed — automatic-update settings no longer reset while editing
+
+- Separated unsaved mode, frequency, and maintenance-time choices from the
+  five-second updater status poll. The form now keeps the user's draft until
+  Save changes succeeds instead of snapping back to the stored configuration.
+- Replaced the native control row with consistent mode cards, styled schedule
+  controls, a clear primary save action, and update actions shown only when an
+  update is available.
+
+### Verified
+
+- Reproduced the live poll overwrite, then verified the repaired draft survives
+  repeated refreshes. Full tests and JavaScript syntax checks pass. The updater,
+  scheduler, launcher, dependencies, and running service remain unchanged.
+
+---
+
 ## [1.22.0] — 2026-07-15
 
 ### Added — safe optional automatic updates
