@@ -1,0 +1,7 @@
+# Chat Studio's optional/reinstallable local generation stack.
+# Keep exact versions aligned with the verified MLX runtime in requirements.lock.txt.
+mlx==0.31.2
+mlx-lm==0.31.3
+mlx-vlm==0.6.4
+transformers==5.12.1
+tokenizers==0.22.2

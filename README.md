@@ -25,6 +25,10 @@ Chat Studio replaces juggling LM Studio as a second always-on app: it runs as a 
 4. Switch to **Chat**, click **load** next to the model, and start chatting.
 5. (Optional) Click **Install as Startup Service** in the sidebar to run Chat Studio as an always-on background service instead of manually starting it each time — see "Run as an always-on server" below.
 
+Generation dependencies can be repaired without stopping Chat Studio first. Use **Install Generation** on a fresh environment or **Reinstall Generation** afterward; the launcher installs and verifies the pinned MLX stack, then restarts the active regular or service-mode server automatically.
+
+The header's **What's New** button always shows the installed release version and the matching details from `CHANGELOG.md`.
+
 ## Automatic updates (optional)
 
 Open **Settings → Automatic updates** and choose Off (the default), Notify only,

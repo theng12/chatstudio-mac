@@ -9,7 +9,7 @@
 #   4. regenerate: ../conda_env/bin/pip freeze | grep -v '@ file://' > requirements.lock.txt
 #      (re-add a normal pin for any package the grep dropped, then re-add this header)
 #   5. commit both files
-# Generated: 2026-07-09 · python=3.12 (pinned in install.js) · macOS arm64
+# Generated: 2026-07-19 · python=3.12 (pinned in install.js) · macOS arm64
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.14.1
@@ -32,6 +32,7 @@ mdurl==0.1.2
 mlx==0.31.2
 mlx-lm==0.31.3
 mlx-metal==0.31.2
+mlx-vlm==0.6.4
 numpy==2.5.0
 packaging==26.2
 protobuf==7.35.1

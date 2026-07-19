@@ -20,7 +20,7 @@ SPEC = {
     "default_hour": 3,
     "default_weekday": 6,
     "verify_module": "backend.main",
-    "allow_build_suffix": True,
+    "allow_build_suffix": False,
 }
 
 

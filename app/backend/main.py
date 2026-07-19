@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -52,17 +53,6 @@ def _read_app_version() -> str:
     try:
         version_file = Path(__file__).resolve().parent.parent.parent / "VERSION"
         ver = version_file.read_text().strip()
-        git_dir = version_file.parent / ".git"
-        if git_dir.exists():
-            head = git_dir / "HEAD"
-            if head.exists():
-                ref = head.read_text().strip()
-                if ref.startswith("ref: "):
-                    ref_path = git_dir / ref[5:]
-                    if ref_path.exists():
-                        ver += "." + ref_path.read_text().strip()[:7]
-                else:
-                    ver += "." + ref[:7]
         return ver
     except Exception:
         return "unknown"
@@ -290,7 +280,7 @@ import time as _time
 import urllib.request as _urlreq
 
 _UPDATE_REPO = "theng12/chatstudio-mac"
-_GEN_MODULE = None
+_GEN_MODULE = "mlx_lm"
 _update_state = {"checked_at": 0.0, "latest": None}
 
 
@@ -339,6 +329,50 @@ def app_release_version() -> dict:
         "app_version": APP_VERSION,
         "title": app.title,
     }
+
+
+@app.get("/api/release-notes")
+def release_notes() -> dict:
+    """Return the current release notes from the checked-out CHANGELOG.
+
+    Keeping this server-side makes the in-app What's New panel follow the
+    actual installed release instead of a separately maintained frontend list.
+    Markdown is returned as plain strings; the frontend renders it with
+    textContent via Alpine, so model/release text cannot become HTML.
+    """
+    try:
+        changelog = Path(__file__).resolve().parent.parent.parent / "CHANGELOG.md"
+        text = changelog.read_text(encoding="utf-8")
+    except OSError:
+        return {"current_version": APP_VERSION, "releases": []}
+
+    releases = []
+    sections = re.split(r"(?m)^##\s+", text)[1:]
+    for section in sections:
+        lines = section.splitlines()
+        if not lines:
+            continue
+        heading = lines[0].strip()
+        match = re.search(r"\d+\.\d+\.\d+", heading)
+        if not match:
+            continue
+        details = []
+        for line in lines[1:]:
+            value = line.strip()
+            if value.startswith("- "):
+                details.append(re.sub(r"[`*]", "", value[2:].strip()))
+            elif value.startswith("### "):
+                details.append(re.sub(r"[`*]", "", value[4:].strip()))
+            if len(details) >= 12:
+                break
+        releases.append({
+            "version": match.group(0),
+            "heading": heading,
+            "details": details,
+        })
+        if len(releases) >= 8:
+            break
+    return {"current_version": APP_VERSION, "releases": releases}
 
 
 @app.get("/api/auto-update/status")

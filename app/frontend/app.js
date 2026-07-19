@@ -4,6 +4,9 @@ function studio() {
     tab: "chat",
     apiBase: window.location.origin,
     appVersion: "",
+    showWhatsNew: false,
+    releaseNotesCurrent: "",
+    releaseNotes: [],
 
     health: { ok: false },
     system: {},
@@ -111,6 +114,7 @@ function studio() {
     async init() {
       this.loadGen();
       this.loadLive();
+      await this.refreshReleaseNotes();
       await this.refreshHealth();
       await this.refreshSystem();
       // Seed the RAM-slider budget from detected RAM (or a saved override).
@@ -208,6 +212,17 @@ function studio() {
         if (this.diag.app_version) this.appVersion = this.diag.app_version;
       }
       catch (e) { this.diag = { available: false, error: String(e), packages: [] }; }
+    },
+    async refreshReleaseNotes() {
+      try {
+        const r = await fetch(`${this.apiBase}/api/release-notes`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        this.releaseNotesCurrent = data.current_version || this.appVersion || "unknown";
+        this.releaseNotes = Array.isArray(data.releases) ? data.releases : [];
+      } catch (e) {
+        this.releaseNotes = [];
+      }
     },
     async installDeps() {
       this.depInstall.running = true;

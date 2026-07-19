@@ -5,6 +5,9 @@ module.exports = {
   icon: "icon.png",
   menu: async (kernel, info) => {
     const installed = info.exists("conda_env")
+    const generationInstalled = info.exists("generation/.installed") ||
+                                (info.exists("conda_env/lib/python3.12/site-packages/mlx_lm") &&
+                                 info.exists("conda_env/lib/python3.12/site-packages/mlx_vlm"))
     // Always-on launchd service installed? (marker dropped by install_service.sh)
     const serviceInstalled = info.exists("service/.installed")
     const servicePort = 47871
@@ -14,6 +17,7 @@ module.exports = {
     const serviceItem = { icon: "fa-solid fa-heart-pulse", text: "Install as Startup Service", href: "service.js" }
     const running = {
       install: info.running("install.js"),
+      installGeneration: info.running("install_generation.js"),
       start: info.running("start.js"),
       update: info.running("update.js"),
       updateRestart: info.running("update_and_restart.js"),
@@ -22,6 +26,9 @@ module.exports = {
 
     if (running.install) {
       return [{ default: true, icon: "fa-solid fa-plug", text: "Installing", href: "install.js" }]
+    }
+    if (running.installGeneration) {
+      return [{ default: true, icon: "fa-solid fa-wand-magic-sparkles", text: "Installing Generation", href: "install_generation.js" }]
     }
     if (running.update) {
       return [{ default: true, icon: "fa-solid fa-rotate", text: "Updating", href: "update.js" }]
@@ -55,6 +62,9 @@ module.exports = {
         { icon: "fa-solid fa-screwdriver-wrench", text: "Repair · take over port", href: "service.js" },
         { icon: "fa-solid fa-folder-open", text: "Service Logs", href: "logs/service?fs=true" },
         { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
+        { icon: "fa-solid fa-wand-magic-sparkles",
+          text: generationInstalled ? "Reinstall Generation" : "Install Generation",
+          href: "install_generation.js" },
         { icon: "fa-regular fa-circle-xmark", text: "Uninstall Startup Service", href: "unservice.js" },
         { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" }
       ]
@@ -88,18 +98,29 @@ module.exports = {
             href: "open_external.js",
             params: { url: browserUrl } },
           { icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
+          { icon: "fa-solid fa-wand-magic-sparkles",
+            text: generationInstalled ? "Reinstall Generation" : "Install Generation",
+            href: "install_generation.js" },
           { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
           { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
           serviceItem
         ]
       }
-      return [{ default: true, icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
+        { icon: "fa-solid fa-wand-magic-sparkles",
+          text: generationInstalled ? "Reinstall Generation" : "Install Generation",
+          href: "install_generation.js" }
+      ]
     }
 
     return [
       { default: true, icon: "fa-solid fa-power-off", text: "Start", href: "start.js" },
       { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
       serviceItem,
+      { icon: "fa-solid fa-wand-magic-sparkles",
+        text: generationInstalled ? "Reinstall Generation" : "Install Generation",
+        href: "install_generation.js" },
       { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
       { icon: "fa-solid fa-plug", text: "Reinstall", href: "install.js" },
       { icon: "fa-regular fa-circle-xmark", text: "Reset", href: "reset.js" }

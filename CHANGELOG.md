@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.22.2] — 2026-07-19
+
+### Added — persistent generation install and live What's New details
+
+- Added one mode-aware **Install Generation / Reinstall Generation** action to regular Start mode, regular running mode, and startup-service mode. It installs and verifies the pinned MLX, MLX-LM, MLX-VLM, Transformers, and Tokenizers stack, records a persistent completion marker, and restarts only the active server mode.
+- A generation install can now be launched while Chat Studio is already running; users no longer need to stop the service manually first.
+- Added a persistent **What's New** button to the app header. Its modal reads the installed `CHANGELOG.md` through `/api/release-notes`, so every release shows its version and details without a separately maintained frontend copy.
+- Release/version displays now use the numeric `VERSION` only; Git commit suffixes are no longer appended to the app version.
+- Added public release-notes and generation-diagnostics regression coverage. Existing user conversations, model caches, service ownership, and provider settings were left unchanged.
+
 ## [1.22.1] — 2026-07-18
 
 ### Fixed — automatic-update settings no longer reset while editing
