@@ -49,6 +49,28 @@ Rotated technical logs are under `logs/auto_update/`; switching Off unloads and
 removes the schedule immediately. Fix any named Git/service issue and use Retry
 if the panel enters a Repair/failed state.
 
+## Model memory management
+
+Chat Studio keeps the current local LLM loaded by default so the next response
+starts quickly. In Settings, **Balanced** releases it after 10 idle minutes,
+**Memory Saver** after 2 minutes, and **Immediate** after each completed local
+response. **Performance** is the default and never unloads automatically.
+
+The Chat toolbar and Settings both provide **Release Memory / Unload Model**.
+Automatic and manual cleanup wait for active model loading and generation to
+finish, then remove the loaded model and clear available MLX/Metal allocator
+caches. Downloaded weights and conversations remain on disk.
+
+```text
+GET  /api/memory-policy
+PUT  /api/memory-policy   # { "mode": "performance|balanced|memory_saver|immediate" }
+POST /api/memory/release
+```
+
+After Update and the next normal restart, Activity Monitor labels the backend
+**Chat Studio Mac** instead of a generic Python process. Python remains the
+runtime underneath the friendly title.
+
 ## Local storage policy
 
 Chat Studio participates in Studio Hub's shared three-day / 80 GB fleet policy,

@@ -38,11 +38,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions, storage_policy
+from . import cache, catalog, settings as app_settings, llm_engine, hub, memory_policy, providers, router, sessions, storage_policy
 from .downloads import manager
 from .fleet_auth import load_token as load_fleet_token, make_middleware as fleet_middleware, manifest
 from .auto_update import UpdateError
 from .auto_update_config import create_updater
+from .process_title import PROCESS_TITLE, apply_process_title
+
+
+PROCESS_TITLE_APPLIED = apply_process_title()
 
 
 # ───────────── App release version ─────────────
@@ -150,6 +154,10 @@ class AutoUpdateRequestBody(BaseModel):
     after_current: bool = False
 
 
+class MemoryPolicyBody(BaseModel):
+    mode: str
+
+
 class TokenTestBody(BaseModel):
     hf_token: Optional[str] = None
 
@@ -242,6 +250,10 @@ def _automatic_update_blockers() -> list[str]:
 
 
 auto_updater = create_updater(readiness=_automatic_update_blockers)
+memory_policy.start_background(
+    llm_engine.manager,
+    active_check=lambda: bool(_CHAT_ACTIVITY),
+)
 
 
 # ───────────── API: meta ─────────────
@@ -551,6 +563,27 @@ def cleanup_storage_policy(body: dict | None = None) -> dict:
     return storage_policy.cleanup()
 
 
+@app.get("/api/memory-policy")
+def get_memory_policy() -> dict:
+    return {**memory_policy.status(), "process_title": PROCESS_TITLE,
+            "process_title_applied": PROCESS_TITLE_APPLIED}
+
+
+@app.put("/api/memory-policy")
+def put_memory_policy(body: MemoryPolicyBody) -> dict:
+    memory_policy.save(body.mode)
+    return get_memory_policy()
+
+
+@app.post("/api/memory/release")
+def release_memory() -> dict:
+    return {
+        **memory_policy.release_now(),
+        "process_title": PROCESS_TITLE,
+        "process_title_applied": PROCESS_TITLE_APPLIED,
+    }
+
+
 @app.post("/api/settings/test-hf-token")
 def test_hf_token(body: TokenTestBody) -> dict:
     token = (body.hf_token or "").strip() or app_settings.get_hf_token()
@@ -834,14 +867,9 @@ def chat_cancel() -> dict:
 @app.post("/api/chat/unload")
 def chat_unload() -> dict:
     """Free the loaded local model from unified memory (Unload button)."""
-    repo = llm_engine.manager.loaded_repo()
-    unloaded = llm_engine.manager.unload()
-    return {"unloaded": unloaded, "repo": repo}
-
-
-# Auto-unload an idle local model (e.g. after switching to a cloud model) so it
-# stops holding unified memory. Default: free it after 10 minutes unused.
-_IDLE_UNLOAD_SECONDS = 600
+    result = memory_policy.release_now()
+    details = result.get("last_release_details") or {}
+    return {"unloaded": bool(details.get("released")), "repo": details.get("repo")}
 
 
 @app.on_event("startup")
@@ -857,23 +885,6 @@ async def _prune_stale_partials():
         except Exception:
             pass
     asyncio.create_task(_sweep())
-
-
-@app.on_event("startup")
-async def _start_idle_unloader():
-    async def loop():
-        while True:
-            await asyncio.sleep(60)
-            try:
-                freed = await asyncio.to_thread(
-                    llm_engine.manager.unload_if_idle, _IDLE_UNLOAD_SECONDS
-                )
-                if freed:
-                    print(f"[chat studio] auto-unloaded idle model: {freed}",
-                          file=sys.stderr, flush=True)
-            except Exception:
-                pass
-    asyncio.create_task(loop())
 
 
 @app.post("/api/chat/completions")

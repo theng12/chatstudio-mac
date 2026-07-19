@@ -104,6 +104,14 @@ function studio() {
       dirty:false,
     },
     storagePolicy: { enabled:true, retention_days:3, max_gb:80, used_bytes:0, supported:false, loaded:false, busy:false, message:"" },
+    memoryPolicy: {
+      mode:"performance", default_mode:"performance", idle_seconds:null,
+      loaded_model:null, model_idle_seconds:null, next_release_at:null,
+      last_release_at:null, last_release_reason:null, release_count:0,
+      process_title:"Chat Studio Mac", process_title_applied:false,
+      loaded:false, busy:false, message:"", messageKind:"info",
+      draft:{mode:"performance"}, dirty:false,
+    },
     hfTokenInput: "",
     tokenTest: { ok: false, msg: "" },
 
@@ -125,6 +133,7 @@ function studio() {
       await this.refreshChatModels();
       await this.refreshProviders();
       await this.refreshStoragePolicy();
+      await this.refreshMemoryPolicy(true, true);
       this.initModelLibrary();
       await this.refreshConnectivity();
       this.pickDefaultModel();
@@ -133,6 +142,7 @@ function studio() {
       setInterval(() => this.refreshHealth(), 15000);
       setInterval(() => {
         if (this.tab === "settings" || ["checking","updating","restarting","deferred"].includes(this.autoUpdate.state)) this.refreshAutoUpdate(true);
+        if (this.tab === "settings") this.refreshMemoryPolicy(true);
       }, 5000);
       // Provider health (Uninterrupted Mode): on launch + every 5 minutes.
       this.refreshRouterProviders();
@@ -153,7 +163,7 @@ function studio() {
       if (tab === "chat") { this.refreshDiagnostics(); this.refreshChatModels(); }
       if (tab === "models") { this.refreshCatalog(); this.refreshProviders(); }
       if (tab === "api") this.refreshConnectivity();
-      if (tab === "settings") { this.refreshSettings(); this.refreshAutoUpdate(true); this.refreshStoragePolicy(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
+      if (tab === "settings") { this.refreshSettings(); this.refreshAutoUpdate(true); this.refreshMemoryPolicy(true); this.refreshStoragePolicy(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
     },
 
     async refreshAll() {
@@ -172,7 +182,7 @@ function studio() {
         if (au && au.at && au.at !== this._lastAutoUnloadAt) {
           this._lastAutoUnloadAt = au.at;
           if (this._seenAutoUnload) {  // skip the first poll (pre-existing event)
-            this.showToast(`⏏ Freed ${this.sessionModelShort(au.repo)} — idle 10 min, memory released`);
+            this.showToast(`⏏ Freed ${this.sessionModelShort(au.repo)} — memory released automatically`);
           }
           this._seenAutoUnload = true;
         } else if (au) {
@@ -181,11 +191,7 @@ function studio() {
       } catch (e) { this.health = { ok: false }; }
     },
     async unloadModel() {
-      try {
-        const d = await (await fetch(`${this.apiBase}/api/chat/unload`, { method: "POST" })).json();
-        if (d.unloaded && d.repo) this.showToast(`⏏ Unloaded ${this.sessionModelShort(d.repo)} — memory freed`);
-      } catch (e) {}
-      await this.refreshHealth();
+      await this.releaseMemory();
     },
     showToast(msg) {
       this.toast = msg;
@@ -375,6 +381,38 @@ function studio() {
         const d=await r.json(); if(!r.ok) throw new Error(d.detail||`HTTP ${r.status}`);
         this.storagePolicy={...this.storagePolicy,...d,loaded:true,busy:false,message:"Nothing to remove. Chat Studio has no disposable media outputs."};
       } catch(e) { this.storagePolicy.busy=false; this.storagePolicy.message=String(e.message||e); }
+    },
+
+    async refreshMemoryPolicy(silent=false, forceDraft=false) {
+      try {
+        const r=await fetch(`${this.apiBase}/api/memory-policy`,{cache:"no-store"});
+        const d=await r.json(); if(!r.ok) throw new Error(d.detail||`HTTP ${r.status}`);
+        const saved=d.mode;
+        Object.assign(this.memoryPolicy,d,{loaded:true});
+        if(forceDraft || !this.memoryPolicy.dirty){this.memoryPolicy.draft={mode:saved};this.memoryPolicy.dirty=false;}
+      } catch(e){if(!silent){this.memoryPolicy.message=String(e.message||e);this.memoryPolicy.messageKind="error";}}
+    },
+    markMemoryPolicyDirty(){this.memoryPolicy.dirty=true;this.memoryPolicy.message="";this.memoryPolicy.messageKind="info";},
+    memoryPolicyTime(value){if(!value)return "Not scheduled";const n=Number(value);const d=new Date(n<1e12?n*1000:n);return Number.isNaN(d.getTime())?"Not scheduled":d.toLocaleString();},
+    async saveMemoryPolicy(){
+      this.memoryPolicy.busy=true;this.memoryPolicy.message="Saving memory mode…";this.memoryPolicy.messageKind="info";
+      try{
+        const r=await fetch(`${this.apiBase}/api/memory-policy`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify(this.memoryPolicy.draft)});
+        const d=await r.json();if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+        Object.assign(this.memoryPolicy,d,{loaded:true,draft:{mode:d.mode},dirty:false,message:"Memory mode saved.",messageKind:"success"});
+      }catch(e){this.memoryPolicy.message=String(e.message||e);this.memoryPolicy.messageKind="error";}
+      finally{this.memoryPolicy.busy=false;}
+    },
+    async releaseMemory(){
+      this.memoryPolicy.busy=true;this.memoryPolicy.message="Releasing model memory…";this.memoryPolicy.messageKind="info";
+      try{
+        const r=await fetch(`${this.apiBase}/api/memory/release`,{method:"POST"});
+        const d=await r.json();if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+        const repo=d.last_release_details?.repo;
+        Object.assign(this.memoryPolicy,d,{loaded:true,message:repo?`Released ${this.sessionModelShort(repo)} from memory.`:"Allocator caches cleared; no local model was loaded.",messageKind:"success"});
+        this.showToast(repo?`⏏ Unloaded ${this.sessionModelShort(repo)} — memory freed`:"Memory caches cleared");
+      }catch(e){this.memoryPolicy.message=String(e.message||e);this.memoryPolicy.messageKind="error";this.showToast(this.memoryPolicy.message);}
+      finally{this.memoryPolicy.busy=false;await this.refreshHealth();}
     },
 
     async refreshAutoUpdate(silent=false) {

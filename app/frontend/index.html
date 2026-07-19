@@ -169,7 +169,7 @@
           </div>
           <div class="spacer"></div>
           <span class="mem-pill" x-show="health.loaded_model" x-cloak :title="'Local model in memory: ' + health.loaded_model">● <span x-text="sessionModelShort(health.loaded_model)"></span> loaded</span>
-          <button class="ghost small" x-show="health.loaded_model" x-cloak @click="unloadModel()" :title="'Free ' + sessionModelShort(health.loaded_model) + ' from unified memory'">⏏ Unload</button>
+          <button class="ghost small" x-show="health.loaded_model" x-cloak @click="releaseMemory()" :disabled="memoryPolicy.busy || streaming || loadingModel" :title="'Free ' + sessionModelShort(health.loaded_model) + ' from unified memory'">⏏ Release Memory</button>
           <button class="ghost small" @click="newChat()" title="Clear the conversation">✦ New chat</button>
           <button class="ghost small params-toggle" @click="showParams=!showParams">⚙ Params</button>
         </div>
@@ -568,6 +568,23 @@
           </span>
         </div>
       </div>
+
+      <section class="card auto-update-card memory-policy-card" x-show="memoryPolicy.loaded" x-cloak>
+        <div class="auto-update-head"><div><h3>Model memory</h3><p class="card-sub">Keep the local LLM warm for speed, or automatically return unified memory after Chat Studio becomes idle.</p></div><span class="auto-update-state" :class="memoryPolicy.busy ? 'checking' : (memoryPolicy.loaded_model ? 'available' : 'succeeded')" x-text="memoryPolicy.busy ? 'working' : (memoryPolicy.loaded_model ? 'model loaded' : 'memory clear')"></span></div>
+        <fieldset class="auto-update-mode-group" @change="markMemoryPolicyDirty()">
+          <legend>Performance mode</legend>
+          <div class="auto-update-mode-options memory-policy-options">
+            <label class="auto-update-mode-option" :class="{active:memoryPolicy.draft.mode==='performance'}"><input type="radio" name="memory-policy-mode" value="performance" x-model="memoryPolicy.draft.mode"><span><strong>Performance · default</strong><small>Keep the model loaded for the fastest next response.</small></span></label>
+            <label class="auto-update-mode-option" :class="{active:memoryPolicy.draft.mode==='balanced'}"><input type="radio" name="memory-policy-mode" value="balanced" x-model="memoryPolicy.draft.mode"><span><strong>Balanced</strong><small>Unload after 10 minutes without local chat activity.</small></span></label>
+            <label class="auto-update-mode-option" :class="{active:memoryPolicy.draft.mode==='memory_saver'}"><input type="radio" name="memory-policy-mode" value="memory_saver" x-model="memoryPolicy.draft.mode"><span><strong>Memory Saver</strong><small>Unload after 2 idle minutes.</small></span></label>
+            <label class="auto-update-mode-option" :class="{active:memoryPolicy.draft.mode==='immediate'}"><input type="radio" name="memory-policy-mode" value="immediate" x-model="memoryPolicy.draft.mode"><span><strong>Immediate</strong><small>Unload after every completed local response.</small></span></label>
+          </div>
+        </fieldset>
+        <div class="auto-update-actions"><button class="primary" @click="saveMemoryPolicy()" :disabled="memoryPolicy.busy || !memoryPolicy.dirty" x-text="memoryPolicy.busy ? 'Working…' : 'Save mode'"></button><span class="auto-update-unsaved" x-show="memoryPolicy.dirty">Unsaved changes</span><span class="auto-update-action-spacer"></span><button class="ghost" @click="releaseMemory()" :disabled="memoryPolicy.busy">Release Memory / Unload Model</button></div>
+        <p class="auto-update-message" x-show="memoryPolicy.message" :class="memoryPolicy.messageKind" x-text="memoryPolicy.message"></p>
+        <div class="auto-update-status-grid"><div><span>Current mode</span><strong x-text="memoryPolicy.mode.replace('_',' ')"></strong></div><div><span>Local model</span><strong x-text="memoryPolicy.loaded_model ? sessionModelShort(memoryPolicy.loaded_model) : 'None loaded'"></strong></div><div><span>Next release</span><strong x-text="memoryPolicy.next_release_at ? memoryPolicyTime(memoryPolicy.next_release_at) : (memoryPolicy.mode==='performance' ? 'Manual only' : 'After next local response')"></strong></div><div><span>Last release</span><strong x-text="memoryPolicyTime(memoryPolicy.last_release_at)"></strong></div><div><span>Release count</span><strong x-text="memoryPolicy.release_count || 0"></strong></div><div><span>Activity Monitor</span><strong x-text="memoryPolicy.process_title || 'Chat Studio Mac'"></strong></div></div>
+        <p class="hint">Downloaded models and conversations stay on disk. Automatic and manual release both wait for active model loading and chat generation to finish.</p>
+      </section>
 
       <section class="card auto-update-card" x-show="autoUpdate.loaded" x-cloak>
         <div class="auto-update-head"><div><h3>Automatic updates</h3><p class="card-sub">Optional, recoverable updates that wait for chats, model loading, and downloads to finish.</p></div><span class="auto-update-state" :class="autoUpdate.state" x-text="autoUpdate.state"></span></div>

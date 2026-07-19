@@ -369,7 +369,41 @@ class LLMManager:
             return {"repo": repo, "already_loaded": False}
 
     def unload(self) -> bool:
-        return self._exec.submit(self._unload_sync).result()
+        return bool(self.release_memory()["released"])
+
+    def release_memory(self, reason: str = "manual") -> dict:
+        """Drop the local model and clear MLX/Metal caches on the MLX worker."""
+        if self._busy.is_set():
+            raise RuntimeError("a model load or chat generation is active")
+        return self._exec.submit(self._release_memory_sync, reason).result()
+
+    def _release_memory_sync(self, reason: str) -> dict:
+        if self._busy.is_set():
+            raise RuntimeError("a model load or chat generation is active")
+        actions = []
+        repo = None
+        with self._lock:
+            if self._loaded is not None:
+                repo = self._loaded.repo
+                self._loaded = None
+                actions.append("local model unloaded")
+        import gc
+        gc.collect()
+        actions.append("Python garbage collection completed")
+        try:
+            import mlx.core as mx
+            synchronize = getattr(mx, "synchronize", None)
+            if callable(synchronize):
+                synchronize()
+            clear_cache = getattr(mx, "clear_cache", None)
+            if callable(clear_cache):
+                clear_cache()
+                actions.append("MLX/Metal cache cleared")
+        except Exception as exc:
+            actions.append(f"MLX cache unavailable: {type(exc).__name__}")
+        if reason.startswith("automatic:") and repo:
+            self._last_auto_unload = {"repo": repo, "at": time.time(), "reason": reason}
+        return {"released": bool(repo), "repo": repo, "actions": actions}
 
     def _unload_sync(self) -> bool:
         with self._lock:
@@ -559,6 +593,7 @@ class LLMManager:
             try:
                 future.result()
             finally:
+                self.touch()
                 self._busy.clear()
 
     def chat_once(

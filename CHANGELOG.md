@@ -10,6 +10,34 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.23.0] — 2026-07-20
+
+### Added — configurable local-model memory management
+
+- Replaced the fixed always-on 10-minute idle unloader with four persistent
+  modes shared across the Studio family. Performance keeps the LLM warm and is
+  the default; Balanced unloads after 10 idle minutes, Memory Saver after 2,
+  and Immediate after each completed local response.
+- Added a full Settings controller and a guarded **Release Memory / Unload
+  Model** action, while retaining the compact release shortcut in the Chat
+  toolbar. Active streams, model loading, and local generation are never
+  interrupted.
+- Added Studio Hub-compatible `GET/PUT /api/memory-policy` and
+  `POST /api/memory/release` endpoints. Cleanup runs on Chat Studio's dedicated
+  MLX worker and clears the model object plus MLX/Metal allocator caches.
+- The backend now requests the friendly Activity Monitor title
+  **Chat Studio Mac** after Update and restart.
+
+### Verification
+
+- Added idle-deadline, default-mode, active-chat guard, API, frontend contract,
+  and exact process-title coverage. All 36 tests pass, along with backend
+  compilation, frontend and launcher syntax, and whitespace checks.
+- An isolated preview passed desktop and compact browser checks with no
+  horizontal overflow; unsaved mode changes survived the five-second poll.
+- The currently running Chat Studio service was not restarted during this
+  release; user chats and loaded models were left undisturbed.
+
 ## [1.22.3] — 2026-07-19
 
 ### Added — safe fleet storage-policy visibility

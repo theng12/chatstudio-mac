@@ -5,6 +5,7 @@ hf_xet>=1.1
 httpx>=0.27
 sse-starlette>=2.1
 python-multipart>=0.0.9
+setproctitle>=1.3.7
 # Floors set to the tested versions. mlx-lm < 0.31 lacks the gemma4
 # architecture, so Gemma 4 models would fail to load on a stale env.
 mlx>=0.31
