@@ -38,7 +38,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions
+from . import cache, catalog, settings as app_settings, llm_engine, hub, providers, router, sessions, storage_policy
 from .downloads import manager
 from .fleet_auth import load_token as load_fleet_token, make_middleware as fleet_middleware, manifest
 from .auto_update import UpdateError
@@ -530,6 +530,25 @@ def update_settings(body: SettingsBody) -> dict:
     if body.request_timeout is not None:
         app_settings.set_request_timeout(body.request_timeout)
     return app_settings.serialize_public()
+
+
+@app.get("/api/storage-policy")
+def get_storage_policy() -> dict:
+    return storage_policy.status()
+
+
+@app.put("/api/storage-policy")
+def put_storage_policy(body: dict) -> dict:
+    storage_policy.save(body.get("enabled"), body.get("retention_days"), body.get("max_gb"))
+    return storage_policy.status()
+
+
+@app.post("/api/storage-policy/cleanup")
+def cleanup_storage_policy(body: dict | None = None) -> dict:
+    target = (body or {}).get("target_bytes")
+    if target is not None and (not isinstance(target, int) or target < 0):
+        raise HTTPException(400, "target_bytes must be a non-negative integer")
+    return storage_policy.cleanup()
 
 
 @app.post("/api/settings/test-hf-token")

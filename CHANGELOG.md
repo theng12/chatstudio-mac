@@ -10,6 +10,26 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.22.3] — 2026-07-19
+
+### Added — safe fleet storage-policy visibility
+
+- Added the shared three-day / 80 GB storage-policy API and a matching modern
+  Settings card so Studio Hub can report one consistent policy across every
+  Studio on a Mac.
+- Chat Studio correctly reports zero disposable generated assets. Clean now is
+  intentionally a no-op: server-side conversation history, downloaded model
+  weights, provider settings, credentials, and active chats are user data and
+  are never treated as cache.
+
+### Verification
+
+- Added API and protected-history regression coverage. The full test suite,
+  Python compilation, and JavaScript syntax checks pass. Chat sessions, model
+  loading, provider routing, launchers, and dependencies were left unchanged.
+
+---
+
 ## [1.22.2] — 2026-07-19
 
 ### Added — persistent generation install and live What's New details

@@ -103,6 +103,7 @@ function studio() {
       draft:{mode:"off",frequency:"daily",maintenance_hour:3,idle_only:true},
       dirty:false,
     },
+    storagePolicy: { enabled:true, retention_days:3, max_gb:80, used_bytes:0, supported:false, loaded:false, busy:false, message:"" },
     hfTokenInput: "",
     tokenTest: { ok: false, msg: "" },
 
@@ -123,6 +124,7 @@ function studio() {
       await this.refreshDiagnostics();
       await this.refreshChatModels();
       await this.refreshProviders();
+      await this.refreshStoragePolicy();
       this.initModelLibrary();
       await this.refreshConnectivity();
       this.pickDefaultModel();
@@ -151,7 +153,7 @@ function studio() {
       if (tab === "chat") { this.refreshDiagnostics(); this.refreshChatModels(); }
       if (tab === "models") { this.refreshCatalog(); this.refreshProviders(); }
       if (tab === "api") this.refreshConnectivity();
-      if (tab === "settings") { this.refreshSettings(); this.refreshAutoUpdate(true); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
+      if (tab === "settings") { this.refreshSettings(); this.refreshAutoUpdate(true); this.refreshStoragePolicy(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
     },
 
     async refreshAll() {
@@ -350,6 +352,29 @@ function studio() {
     },
     async refreshSettings() {
       try { this.settings = await (await fetch(`${this.apiBase}/api/settings`)).json(); } catch (e) {}
+    },
+    async refreshStoragePolicy() {
+      try {
+        const r = await fetch(`${this.apiBase}/api/storage-policy`);
+        if (!r.ok) return;
+        this.storagePolicy = { ...this.storagePolicy, ...(await r.json()), loaded:true, busy:false };
+      } catch (e) { /* keep last */ }
+    },
+    async saveStoragePolicy() {
+      this.storagePolicy.busy=true; this.storagePolicy.message="Saving fleet policy…";
+      try {
+        const r=await fetch(`${this.apiBase}/api/storage-policy`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({enabled:!!this.storagePolicy.enabled,retention_days:Number(this.storagePolicy.retention_days),max_gb:Number(this.storagePolicy.max_gb)})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.detail||`HTTP ${r.status}`);
+        this.storagePolicy={...this.storagePolicy,...d,loaded:true,busy:false,message:"Saved. Chat history and model caches remain protected."};
+      } catch(e) { this.storagePolicy.busy=false; this.storagePolicy.message=String(e.message||e); }
+    },
+    async cleanStoragePolicyNow() {
+      this.storagePolicy.busy=true; this.storagePolicy.message="Checking for disposable media…";
+      try {
+        const r=await fetch(`${this.apiBase}/api/storage-policy/cleanup`,{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+        const d=await r.json(); if(!r.ok) throw new Error(d.detail||`HTTP ${r.status}`);
+        this.storagePolicy={...this.storagePolicy,...d,loaded:true,busy:false,message:"Nothing to remove. Chat Studio has no disposable media outputs."};
+      } catch(e) { this.storagePolicy.busy=false; this.storagePolicy.message=String(e.message||e); }
     },
 
     async refreshAutoUpdate(silent=false) {

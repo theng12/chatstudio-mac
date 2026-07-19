@@ -49,6 +49,19 @@ Rotated technical logs are under `logs/auto_update/`; switching Off unloads and
 removes the schedule immediately. Fix any named Git/service issue and use Retry
 if the panel enters a Repair/failed state.
 
+## Local storage policy
+
+Chat Studio participates in Studio Hub's shared three-day / 80 GB fleet policy,
+but it has no disposable generated media. The Settings card and standard API
+therefore report zero eligible assets. Model weights and server-side chat
+history are explicitly protected and Clean now never deletes them.
+
+```text
+GET  /api/storage-policy
+PUT  /api/storage-policy          # { enabled, retention_days, max_gb }
+POST /api/storage-policy/cleanup  # reports zero eligible assets
+```
+
 ## Versioning
 
 Current version is stored at the project root in [`VERSION`](VERSION).
