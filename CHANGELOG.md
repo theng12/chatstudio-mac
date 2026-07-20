@@ -10,6 +10,26 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.23.1] — 2026-07-20
+
+### Added — required release metadata for every shipped change
+
+- Established the release rule that every shipped behavior, API, provider,
+  model-catalog, dependency, launcher, integration, or user-visible change
+  increments the numeric `VERSION` using the existing semantic-versioning
+  policy and adds matching, user-facing details to this changelog.
+- Added release-metadata regression coverage so the numeric `VERSION` must
+  match the newest changelog release and that release must contain details for
+  the in-app **What's New** panel.
+- Added the ChatStudio → GenStudio executor integration-readiness document,
+  including the current contract gaps and required execution evidence.
+
+### Verification
+
+- Verified the installed **What's New** path reads `CHANGELOG.md` through
+  `/api/release-notes`; the header, footer, API responses, and static-asset
+  cache-buster all use the same root `VERSION` value after restart.
+
 ## [1.23.0] — 2026-07-20
 
 ### Added — configurable local-model memory management

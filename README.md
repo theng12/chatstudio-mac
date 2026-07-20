@@ -88,6 +88,16 @@ POST /api/storage-policy/cleanup  # reports zero eligible assets
 
 Current version is stored at the project root in [`VERSION`](VERSION).
 
+### Release rule
+
+Every shipped behavior, API, provider, model-catalog, dependency, launcher,
+integration, or user-visible change must increment the numeric `VERSION` under
+the semantic-versioning policy and add a matching top entry to
+[`CHANGELOG.md`](CHANGELOG.md). The entry must clearly describe what changed,
+what users should know, and relevant verification or limitations. This is the
+single source for the in-app **What's New** panel; do not create a separate
+frontend release-notes list.
+
 The WebUI footer shows the running version. The same value is also surfaced at:
 
 - `GET /api/version` → the current `VERSION` value and title
