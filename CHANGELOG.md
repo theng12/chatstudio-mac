@@ -10,6 +10,30 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.2] — 2026-07-23
+
+### Fixed — watchdog restarts require confirmed health failure
+
+- Changed the always-on service watchdog from restarting after one missed
+  `/api/health` probe to requiring three consecutive failures. A successful
+  probe removes the repo-relative failure-state file immediately, preventing a
+  transient slow response from interrupting healthy chat work.
+- Added a validated `CHATSTUDIO_WATCHDOG_FAILURES_REQUIRED` override for
+  controlled deployments. Missing, non-numeric, fractional, negative, and
+  below-two values safely return to the three-failure default.
+- Kept the state under the existing ignored `service/` directory and preserved
+  the established launchd restart command. Existing chat dispatch, jobs,
+  update behavior, and service ownership remain unchanged.
+
+### Verification
+
+- Exercised the watchdog with isolated fake health and launchd commands,
+  including threshold, healthy-reset, invalid-override, valid-override, and
+  ignored-state regression cases; no live service or job was restarted.
+- Passed the complete Chat Studio test suite, shell and JavaScript syntax
+  checks, Python source compilation, release-metadata validation, and
+  whitespace validation.
+
 ## [1.24.1] — 2026-07-23
 
 ### Added — consistent release access and fleet restart visibility

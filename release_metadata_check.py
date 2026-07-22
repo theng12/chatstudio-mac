@@ -118,6 +118,7 @@ def is_shipped_path(path: str) -> bool:
         "update.js",
         "update_and_restart.js",
         "whats_new.js",
+        "chatstudio-watchdog.sh",
     }
 
 

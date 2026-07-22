@@ -24,6 +24,7 @@ def test_worktree_product_changes_require_release_metadata() -> None:
 def test_release_guard_distinguishes_product_changes_from_tests_and_docs() -> None:
     assert release_metadata_check.is_shipped_path("app/backend/main.py") is True
     assert release_metadata_check.is_shipped_path("pinokio.js") is True
+    assert release_metadata_check.is_shipped_path("chatstudio-watchdog.sh") is True
     assert release_metadata_check.is_shipped_path("app/tests/test_launcher_menu.py") is False
     assert release_metadata_check.is_shipped_path("chatstudio_genstudio_integration.md") is False
 

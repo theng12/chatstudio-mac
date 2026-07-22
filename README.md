@@ -264,7 +264,9 @@ In the Pinokio sidebar click **❤️ Install as Startup Service**. That's it. I
 - Installs a macOS **launchd LaunchAgent** that runs the server (`serve.sh`) on **port 47871**.
 - **Starts automatically** every time you log in (so it comes back after a reboot).
 - **Restarts itself if it crashes** (launchd `KeepAlive`).
-- Adds a **health watchdog** that pings `/api/health` every 60s and relaunches the server if it ever hangs (alive-but-not-responding).
+- Adds a **health watchdog** that pings `/api/health` every 60s and relaunches
+  the server only after three consecutive misses. Any successful response clears
+  the streak immediately, so a single slow probe cannot restart healthy work.
 
 The same health response exposes a bounded `restart_rate` snapshot for Studio
 Hub: restart counts over one hour, 24 hours, and seven days; the latest restart;
