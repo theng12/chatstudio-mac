@@ -15,6 +15,16 @@ module.exports = {
     // background service. When the service IS installed we return a dedicated
     // "service mode" menu below instead.
     const serviceItem = { icon: "fa-solid fa-heart-pulse", text: "Install as Startup Service", href: "service.js" }
+    const generationItem = {
+      icon: "fa-solid fa-wand-magic-sparkles",
+      text: generationInstalled ? "Reinstall Generation" : "Install Generation",
+      href: "install_generation.js"
+    }
+    const whatsNewItem = {
+      icon: "fa-solid fa-bullhorn",
+      text: "What's New",
+      href: "whats_new.js"
+    }
     const running = {
       install: info.running("install.js"),
       installGeneration: info.running("install_generation.js"),
@@ -25,23 +35,41 @@ module.exports = {
     }
 
     if (running.install) {
-      return [{ default: true, icon: "fa-solid fa-plug", text: "Installing", href: "install.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-plug", text: "Installing", href: "install.js" },
+        whatsNewItem
+      ]
     }
     if (running.installGeneration) {
-      return [{ default: true, icon: "fa-solid fa-wand-magic-sparkles", text: "Installing Generation", href: "install_generation.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-wand-magic-sparkles", text: "Installing Generation", href: "install_generation.js" },
+        whatsNewItem
+      ]
     }
     if (running.update) {
-      return [{ default: true, icon: "fa-solid fa-rotate", text: "Updating", href: "update.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-rotate", text: "Updating", href: "update.js" },
+        whatsNewItem
+      ]
     }
     if (running.updateRestart) {
-      return [{ default: true, icon: "fa-solid fa-rotate", text: "Updating & Restarting", href: "update_and_restart.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-rotate", text: "Updating & Restarting", href: "update_and_restart.js" },
+        whatsNewItem
+      ]
     }
     if (running.reset) {
-      return [{ default: true, icon: "fa-solid fa-broom", text: "Resetting", href: "reset.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-broom", text: "Resetting", href: "reset.js" },
+        whatsNewItem
+      ]
     }
 
     if (!installed) {
-      return [{ default: true, icon: "fa-solid fa-plug", text: "Install", href: "install.js" }]
+      return [
+        { default: true, icon: "fa-solid fa-plug", text: "Install", href: "install.js" },
+        whatsNewItem
+      ]
     }
 
     // ── Service mode ──
@@ -54,6 +82,9 @@ module.exports = {
       const svcUrl = `http://localhost:${servicePort}`
       return [
         { default: true, icon: "fa-solid fa-rocket", text: "Open UI (service)", href: `${svcUrl}/?_cb=${cb}` },
+        { icon: "fa-solid fa-comments", text: "Chat", href: `${svcUrl}/?_cb=${cb}#/chat` },
+        { icon: "fa-solid fa-cube", text: "Models", href: `${svcUrl}/?_cb=${cb}#/models` },
+        { icon: "fa-solid fa-download", text: "Downloads", href: `${svcUrl}/?_cb=${cb}#/downloads` },
         { icon: "fa-solid fa-arrow-up-right-from-square",
           text: `Port ${servicePort} · Open in Browser`,
           href: "open_external.js", params: { url: svcUrl } },
@@ -62,11 +93,10 @@ module.exports = {
         { icon: "fa-solid fa-screwdriver-wrench", text: "Repair · take over port", href: "service.js" },
         { icon: "fa-solid fa-folder-open", text: "Service Logs", href: "logs/service?fs=true" },
         { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
-        { icon: "fa-solid fa-wand-magic-sparkles",
-          text: generationInstalled ? "Reinstall Generation" : "Install Generation",
-          href: "install_generation.js" },
-        { icon: "fa-regular fa-circle-xmark", text: "Uninstall Startup Service", href: "unservice.js" },
-        { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" }
+        generationItem,
+        { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
+        whatsNewItem,
+        { icon: "fa-regular fa-circle-xmark", text: "Uninstall Startup Service", href: "unservice.js" }
       ]
     }
 
@@ -89,6 +119,7 @@ module.exports = {
           { default: true, icon: "fa-solid fa-rocket", text: "Open UI", href: `${local.url}/${bust}` },
           { icon: "fa-solid fa-comments", text: "Chat", href: `${local.url}/${bust}#/chat` },
           { icon: "fa-solid fa-cube", text: "Models", href: `${local.url}/${bust}#/models` },
+          { icon: "fa-solid fa-download", text: "Downloads", href: `${local.url}/${bust}#/downloads` },
           // ── Escape hatch ──
           // Always-visible port + one-click open in system default browser.
           // Pinokio's embedded webview occasionally caches a black/blank
@@ -98,30 +129,27 @@ module.exports = {
             href: "open_external.js",
             params: { url: browserUrl } },
           { icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
-          { icon: "fa-solid fa-wand-magic-sparkles",
-            text: generationInstalled ? "Reinstall Generation" : "Install Generation",
-            href: "install_generation.js" },
-          { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
           { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
-          serviceItem
+          generationItem,
+          serviceItem,
+          { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
+          whatsNewItem
         ]
       }
       return [
         { default: true, icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
-        { icon: "fa-solid fa-wand-magic-sparkles",
-          text: generationInstalled ? "Reinstall Generation" : "Install Generation",
-          href: "install_generation.js" }
+        generationItem,
+        whatsNewItem
       ]
     }
 
     return [
       { default: true, icon: "fa-solid fa-power-off", text: "Start", href: "start.js" },
       { icon: "fa-solid fa-folder-tree", text: "HF Cache", href: "cache/HF_HOME/hub?fs=true" },
+      generationItem,
       serviceItem,
-      { icon: "fa-solid fa-wand-magic-sparkles",
-        text: generationInstalled ? "Reinstall Generation" : "Install Generation",
-        href: "install_generation.js" },
       { icon: "fa-solid fa-rotate", text: "Update", href: "update.js" },
+      whatsNewItem,
       { icon: "fa-solid fa-plug", text: "Reinstall", href: "install.js" },
       { icon: "fa-regular fa-circle-xmark", text: "Reset", href: "reset.js" }
     ]

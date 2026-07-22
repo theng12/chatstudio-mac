@@ -1,7 +1,6 @@
 # ChatStudio → GenStudio Integration Readiness
 
-This document records the read-only integration audit performed against ChatStudio
-`1.23.0` at commit `982fe1e`.
+This document describes the maintained integration boundary for ChatStudio `1.24.1`.
 
 GenStudio remains the public API, global job and attempt authority, routing and retry
 authority, lease/fencing authority, and billing authority. ChatStudio is a local
@@ -10,13 +9,16 @@ and reports execution evidence back to GenStudio.
 
 ## Executive assessment
 
-ChatStudio is usable as a local LLM executor behind an adapter, but its current API is
-not yet a billing-grade or durable GenStudio execution contract.
+ChatStudio is usable as a local LLM executor behind Studio Hub. Local non-streaming
+OpenAI-compatible completions now return billing-grade tokenizer-native usage and an
+immutable runtime revision. The API is not yet a durable or reconnectable streaming
+execution contract.
 
 The existing `/v1/chat/completions` endpoint is a useful transport starting point.
-Production integration still requires immutable model identity, GenStudio execution
-identity, authoritative cancellation, real token usage, structured-output behavior,
-explicit context metadata, durable execution status, and stable error envelopes.
+Production streaming integration still requires request-scoped cancellation,
+structured-output behavior, explicit context metadata, durable execution status,
+stable error envelopes, and a replay/resume protocol. GenStudio remains responsible
+for global execution identity; Studio Hub maps that identity to this local executor.
 
 ## Release discipline
 
@@ -74,9 +76,10 @@ Anthropic, and other providers. Those listings are dynamic and are not immutable
 
 ## 2. Immutable revisions
 
-The local catalog stores repository IDs only. Downloads do not specify a Hugging Face
-revision, commit SHA, or model digest. The public catalog and completion responses do
-not expose one.
+Downloads still follow each repository's configured Hugging Face revision, but a usable
+cached snapshot resolves to an immutable commit. Cached non-vision catalog entries expose
+that commit as `runtime_revision`, and successful local non-streaming `/v1` completions
+return the same evidence as `model_revision`.
 
 The three cached models currently have these local snapshot revisions:
 
@@ -86,10 +89,11 @@ The three cached models currently have these local snapshot revisions:
 | `mlx-community/gemma-3-4b-it-qat-4bit` | `3d9ef289111449933c22761961f16a5df237ce2a` |
 | `mlx-community/gemma-4-E2B-it-qat-4bit` | `42f62737af7a9fd8c1d55d79666c1a217be4e2e2` |
 
-These hashes are local cache evidence only. GenStudio cannot currently prove which
-exact revision generated a result.
+These hashes are local runtime evidence. Studio Hub can preserve the returned revision
+with the assigned GenStudio attempt so GenStudio can prove which cached snapshot
+generated a completed local result.
 
-Required contract change:
+Current local non-streaming result evidence:
 
 ```json
 {
@@ -98,7 +102,8 @@ Required contract change:
 }
 ```
 
-ChatStudio should resolve and return the actual revision used for every execution.
+Streaming and cloud-provider results do not yet return equivalent immutable revision
+evidence. GenStudio must qualify those paths separately rather than infer a revision.
 
 ## 3. Chat and completion API
 
@@ -158,12 +163,18 @@ Local models are loaded automatically when the requested model is cached.
     }
   ],
   "usage": {
-    "prompt_tokens": null,
-    "completion_tokens": null,
-    "total_tokens": null
-  }
+    "prompt_tokens": 123,
+    "completion_tokens": 456,
+    "total_tokens": 579
+  },
+  "usage_verified": true,
+  "model_revision": "7f0dc925e0d0afb0322d96f9255cfddf2ba5636e"
 }
 ```
+
+That verified envelope applies only to local, non-streaming completions. Cloud-provider
+non-streaming responses still return unknown token counts, and streaming responses do
+not yet emit final usage or revision evidence.
 
 ## 4. Streaming protocol
 
@@ -180,7 +191,9 @@ data: [DONE]
 
 Text is delivered through `choices[0].delta.content`. There are no token sequence
 numbers or executor event IDs, so reconnecting cannot safely resume without possible
-duplication.
+duplication. If Story Studio, Studio Hub, or GenStudio disconnects, it must treat the
+stream as non-resumable; the current ChatStudio stream cannot be reattached or repaired
+from a last-seen event. Retrying requires a new, globally controlled GenStudio attempt.
 
 Uninterrupted/fallback mode also has an internal frontend sentinel named
 `__CHATSTUDIO_META__`. This is not a stable external integration protocol.
@@ -214,16 +227,18 @@ capability error such as:
 
 ## 6. Token usage
 
-ChatStudio does not currently provide real token usage:
+Local, non-streaming `/v1/chat/completions` now provides verified token usage:
 
-- The UI estimates output tokens as approximately `characters / 4`.
-- UI tokens-per-second are based on that estimate.
-- `/v1` returns `null` for prompt, completion, and total tokens.
-- Native responses return no usage object.
-- No pre-generation prompt token count is performed.
-- No usage event is sent during streaming.
+- Prompt and completion counts come from the loaded MLX tokenizer/runtime result.
+- `usage_verified: true` distinguishes this evidence from UI estimates.
+- `model_revision` identifies the immutable cached snapshot used.
+- Missing native usage evidence fails the local non-streaming contract instead of being
+  silently estimated.
 
-GenStudio must not bill from these estimates. The executor contract needs to return:
+The UI still uses approximate display metrics, the native endpoint does not return the
+same evidence envelope, cloud-provider usage remains unknown, and streaming has no final
+usage event. GenStudio may use verified local non-streaming evidence but must not bill
+from UI estimates or null cloud/streaming usage.
 
 ```json
 {
@@ -235,7 +250,8 @@ GenStudio must not bill from these estimates. The executor contract needs to ret
 }
 ```
 
-For streaming, usage should appear in the final terminal event.
+For future streaming qualification, usage and runtime revision should appear in a typed,
+durable terminal event that can be replayed after reconnect.
 
 ## 7. Context limits
 
@@ -327,9 +343,10 @@ Catalog memory floors range from 8 GB to 96 GB unified memory. MoE entries accou
 the full checkpoint footprint rather than only active experts.
 
 The catalog exposes parameter count, quantization, download size, minimum memory,
-recommended hardware, and specialty flags. It does not expose immutable revision,
-exact context, tokenizer/processor hashes, actual memory used, load duration, or
-generation speed.
+recommended hardware, specialty flags, and—when a non-vision model is cached—its
+immutable `runtime_revision`, verified-usage capability, and output-token limit. It does
+not expose exact context, tokenizer/processor hashes, actual memory used, load duration,
+or generation speed.
 
 GenStudio should treat catalog memory values as advisory and consult live executor
 readiness before dispatch.
@@ -341,7 +358,7 @@ ChatStudio exposes `GET /api/capabilities` with:
 ```json
 {
   "schema_version": 1,
-  "studio": {"modality": "chat", "title": "Chat Studio KH", "app_version": "1.23.0"},
+  "studio": {"modality": "chat", "title": "Chat Studio KH", "app_version": "1.24.1"},
   "auth": {"mode": "fleet_token", "header": "X-Studio-Token", "loopback_exempt": true},
   "operations": ["chat", "vision", "openai_compatible"],
   "catalog_endpoint": "/api/catalog",
@@ -357,15 +374,19 @@ POST /studio/chat/v1/chat/completions
 ```
 
 The gateway proxies requests and streams SSE responses. This is compatible with basic
-GenStudio text generation, but ChatStudio does not currently accept or persist:
+GenStudio text generation. ChatStudio intentionally does not claim global ownership or
+independently generate/persist:
 
 - `genstudio_job_id`
 - `genstudio_attempt_id`
 - `idempotency_key`
 - `fencing_token`
-- `model_revision`
 - executor lease information
 - billing metadata
+
+For local non-streaming completions, ChatStudio returns `model_revision` as execution
+evidence. It does not accept an expected revision or reject a revision mismatch before
+generation yet.
 
 Studio Hub and GenStudio already establish the correct authority boundary: GenStudio
 owns global jobs, attempts, routing, retries, leases, fencing, and billing. ChatStudio
@@ -395,19 +416,22 @@ into assistant content.
 
 ## 13. Required GenStudio contract changes
 
-Before production integration, add:
+Before production streaming integration, add:
 
-1. Immutable model identity and resolved revision in every result.
-2. GenStudio job, attempt, idempotency, and fencing fields on executor requests.
-3. Request-scoped cancellation.
-4. Real prompt/completion/total token usage.
-5. Model-specific context limits and preflight validation.
-6. Structured JSON capability and enforcement, or explicit unsupported errors.
-7. Stable error codes and typed terminal states.
-8. Stream event IDs and a defined reconnect policy.
-9. Client-disconnect cancellation for the exact execution.
-10. Durable executor status for queued, loading, running, cancelling, failed,
+1. Request-scoped cancellation.
+2. Model-specific context limits and preflight validation.
+3. Structured JSON capability and enforcement, or explicit unsupported errors.
+4. Stable error codes and typed terminal states.
+5. Stream event IDs and a defined reconnect/replay policy.
+6. Client-disconnect cancellation for the exact local execution.
+7. Verified usage and immutable revision in the streaming terminal event.
+8. Durable executor status for queued, loading, running, cancelling, failed,
     cancelled, and completed states.
+
+GenStudio job IDs, attempt IDs, idempotency, fencing, billing, and global retry decisions
+remain GenStudio responsibilities. Studio Hub may carry an explicitly assigned attempt
+to ChatStudio and retain local execution evidence, but ChatStudio must not become a
+second global job authority.
 
 Recommended result envelope:
 
@@ -424,7 +448,7 @@ Recommended result envelope:
   "timing": {"queued_ms": 20, "load_ms": 0, "first_token_ms": 420, "total_ms": 6300},
   "executor": {
     "studio": "chatstudio",
-    "app_version": "1.23.0",
+    "app_version": "1.24.1",
     "backend": "mlx-lm"
   }
 }
@@ -437,13 +461,13 @@ Recommended result envelope:
 | Local model execution | Ready |
 | Basic OpenAI transport | Partially ready |
 | SSE streaming | Partially ready |
-| Immutable model identity | Not ready |
-| Billing-grade usage | Not ready |
+| Immutable model identity | Ready for cached local non-streaming results |
+| Billing-grade usage | Ready for local non-streaming results |
 | Structured JSON | Not supported |
 | Tool calling | Not supported |
 | Context enforcement | Not ready |
 | Explicit cancellation | Partially ready |
-| GenStudio job identity | Not implemented |
+| GenStudio job identity | Owned by GenStudio/Studio Hub adapter |
 | Studio Hub synchronous routing | Compatible |
 | Durable GenStudio execution | Not ready |
 | Local-executor authority boundary | Architecturally appropriate |

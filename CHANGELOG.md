@@ -10,6 +10,40 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.1] — 2026-07-23
+
+### Added — consistent release access and fleet restart visibility
+
+- Added the offline **What's New** action to every Pinokio launcher state. The
+  service and regular-running menus now keep Chat, Models, and Downloads
+  together before shared browser, maintenance, update, and release actions.
+- `/api/health` now reports bounded, read-only watchdog restart-rate evidence
+  for the last hour, day, and seven days, including warning/critical signals.
+  Reading this evidence never restarts a process or changes local dispatch.
+- Added launcher-state, release-metadata, readable-sizing, and restart-rate
+  regression coverage. Product changes now fail the release guard unless both
+  `VERSION` and the current `CHANGELOG.md` entry advance together.
+
+### Changed — readable shared Studio controls and truthful GenStudio notes
+
+- Established 12 px as the minimum metadata size and approximately 15 px / 40
+  px for ordinary controls. Dense icon, inline-link, and model-tab controls keep
+  deliberate compact exceptions without allowing unreadably small text.
+- Updated the GenStudio integration document for verified tokenizer-native
+  usage and immutable local runtime revision evidence. It now explicitly states
+  that streams cannot reconnect or resume and that cloud/streaming usage remains
+  unverified.
+- Existing chat generation, provider routing, downloads, memory handling,
+  update behavior, service ownership, and Studio Hub dispatch remain unchanged.
+
+### Verification
+
+- Passed all 54 Chat Studio tests, JavaScript syntax checks, Python source
+  compilation, release-metadata validation, and whitespace validation.
+- Visually checked Chat, Models, and Settings at 1280×720: no sub-12 px
+  rendered text, horizontal overflow, or browser-console warnings were found.
+- No services, workers, downloads, or chat jobs were restarted or submitted.
+
 ## [1.24.0] — 2026-07-22
 
 ### Added — billing-grade local LLM execution evidence

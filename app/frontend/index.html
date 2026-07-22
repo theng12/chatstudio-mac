@@ -660,7 +660,7 @@
           <button class="ghost small" @click="setDefaultModel('')" x-show="gen.defaultModel">Clear</button>
         </div>
         <p class="hint" x-show="gen.defaultModel">
-          <span class="chip ok" style="font-size:11px;">✓ Default: <span x-text="gen.defaultModel.split('/').pop()"></span></span>
+          <span class="chip ok">✓ Default: <span x-text="gen.defaultModel.split('/').pop()"></span></span>
           — will load automatically on next server start
         </p>
         <p class="hint" x-show="!gen.defaultModel">No default — the Chat tab will start with the first model in the list.</p>
@@ -824,7 +824,7 @@
                 <template x-for="m in p.models" :key="m.repo">
                   <li x-show="m.free || p.paid_enabled">
                     <strong x-text="m.label"></strong>
-                    <span class="chip warn" x-show="!m.free" x-cloak style="font-size:10px; padding:0 5px;">paid</span>
+                    <span class="chip warn" x-show="!m.free" x-cloak style="padding:0 5px;">paid</span>
                     <span class="faint" x-text="'· ' + m.notes"></span>
                   </li>
                 </template>

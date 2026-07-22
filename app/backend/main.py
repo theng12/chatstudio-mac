@@ -38,7 +38,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub, memory_policy, providers, router, sessions, storage_policy
+from . import cache, catalog, settings as app_settings, llm_engine, hub, memory_policy, providers, restart_health, router, sessions, storage_policy
 from .downloads import manager
 from .fleet_auth import load_token as load_fleet_token, make_middleware as fleet_middleware, manifest
 from .auto_update import UpdateError
@@ -270,6 +270,9 @@ def health() -> dict:
         "loaded_model": llm_engine.manager.loaded_repo(),
         "idle_seconds": llm_engine.manager.idle_seconds(),
         "auto_unload": llm_engine.manager.last_auto_unload(),
+        # Read-only operational evidence for Studio Hub. This never changes
+        # dispatch or service state and is bounded to the newest 1 MB of logs.
+        "restart_rate": restart_health.snapshot(),
     }
 
 

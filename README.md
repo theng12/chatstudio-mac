@@ -101,7 +101,7 @@ frontend release-notes list.
 The WebUI footer shows the running version. The same value is also surfaced at:
 
 - `GET /api/version` → the current `VERSION` value and title
-- `GET /api/health` → includes `app_version`
+- `GET /api/health` → includes `app_version` and read-only `restart_rate`
 - `GET /api/chat/diagnostics` → includes `app_version`
 - `GET /api/auto-update/status` → updater settings and redacted state
 - `GET /api/auto-update/readiness` → idle state and active-work reasons
@@ -265,6 +265,12 @@ In the Pinokio sidebar click **❤️ Install as Startup Service**. That's it. I
 - **Starts automatically** every time you log in (so it comes back after a reboot).
 - **Restarts itself if it crashes** (launchd `KeepAlive`).
 - Adds a **health watchdog** that pings `/api/health` every 60s and relaunches the server if it ever hangs (alive-but-not-responding).
+
+The same health response exposes a bounded `restart_rate` snapshot for Studio
+Hub: restart counts over one hour, 24 hours, and seven days; the latest restart;
+and `healthy`, `warning`, or `critical` status. Warning starts at 3/hour,
+4/day, or 10/week; critical starts at 6/hour, 12/day, or 30/week. This signal is
+observability only—it never triggers a restart or changes chat dispatch.
 
 No admin/sudo needed for this step — it's a per-user agent. To remove it later, click **Uninstall Startup Service**.
 
