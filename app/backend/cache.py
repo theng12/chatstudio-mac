@@ -9,6 +9,7 @@ Pure-ish functions that look at the on-disk Hugging Face cache and answer:
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -68,6 +69,30 @@ def has_any_snapshot(repo: str) -> bool:
         return any(snaps.iterdir())
     except FileNotFoundError:
         return False
+
+
+def snapshot_revision(repo: str) -> Optional[str]:
+    """Return the immutable cached Hugging Face commit for a usable snapshot."""
+    root = repo_cache_dir(repo)
+    refs_main = root / "refs" / "main"
+    candidates: list[str] = []
+    try:
+        if refs_main.is_file():
+            candidates.append(refs_main.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeError):
+        pass
+    snapshots = root / "snapshots"
+    try:
+        if snapshots.is_dir():
+            candidates.extend(path.name for path in snapshots.iterdir() if path.is_dir())
+    except (OSError, PermissionError):
+        pass
+    for candidate in candidates:
+        normalized = candidate.lower()
+        if re.fullmatch(r"[0-9a-f]{40,64}", normalized):
+            if (snapshots / candidate).is_dir() and has_weight_files(repo):
+                return normalized
+    return None
 
 
 # Recognized model-weight extensions. A snapshot that contains only README /

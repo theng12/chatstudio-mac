@@ -10,6 +10,25 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.0] — 2026-07-22
+
+### Added — billing-grade local LLM execution evidence
+
+- Local non-streaming `/v1/chat/completions` responses now include exact
+  tokenizer-native prompt, completion, and total token counts reported by
+  MLX-LM, plus an explicit verified-usage marker.
+- Cached text-model catalog entries now report their immutable Hugging Face
+  snapshot revision, verified-token capability, and output-token limit so
+  Studio Hub can qualify an exact runtime instead of a mutable model name.
+
+### Safety
+
+- Missing native token evidence fails the GenStudio execution contract instead
+  of estimating usage. Existing direct and streaming Chat Studio clients retain
+  their established response behavior.
+- Added focused regression coverage for immutable cache revision resolution,
+  native usage capture, and the OpenAI-compatible response evidence.
+
 ## [1.23.1] — 2026-07-20
 
 ### Added — required release metadata for every shipped change

@@ -23,7 +23,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 from . import cache
 
@@ -153,6 +153,18 @@ class LoadedModel:
     loaded_at: float = field(default_factory=time.time)
     kind: str = "text"         # "text" (mlx-lm) | "vlm" (mlx-vlm)
     config: object = None       # model config — mlx-vlm's apply_chat_template needs it
+
+
+@dataclass(frozen=True)
+class ChatGenerationResult:
+    """One complete local response with tokenizer-native usage evidence."""
+
+    text: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    finish_reason: str
+    peak_memory: float | None = None
 
 
 def is_vision_model(repo: str) -> bool:
@@ -497,6 +509,7 @@ class LLMManager:
         max_tokens: int = 1024,
         top_p: float = 1.0,
         images: Optional[list] = None,
+        usage_callback: Optional[Callable[[dict], None]] = None,
     ) -> Iterator[str]:
         """Yields text chunks as the model generates.
 
@@ -529,6 +542,7 @@ class LLMManager:
             # cancel meant for the generation that's actually running.
             self._cancel.clear()
             try:
+                final_response = None
                 if loaded.kind == "vlm":
                     # Vision-language generation via mlx-vlm. Text-only turns
                     # (no image attached) still work — image is just None.
@@ -538,6 +552,7 @@ class LLMManager:
                         image=(image_paths or None),
                         max_tokens=max_tokens, temperature=temperature, top_p=top_p,
                     ):
+                        final_response = response
                         text = getattr(response, "text", None)
                         if text:
                             chunks.put(("chunk", text))
@@ -552,6 +567,7 @@ class LLMManager:
                         loaded.model, loaded.tokenizer, prompt,
                         max_tokens=max_tokens, sampler=sampler,
                     ):
+                        final_response = response
                         text = getattr(response, "text", None)
                         if text:
                             chunks.put(("chunk", text))
@@ -559,6 +575,26 @@ class LLMManager:
                         # is what frees the GPU, not just closing the socket.
                         if self._cancel.is_set():
                             break
+                    if final_response is not None:
+                        prompt_tokens = getattr(final_response, "prompt_tokens", None)
+                        completion_tokens = getattr(final_response, "generation_tokens", None)
+                        if (
+                            isinstance(prompt_tokens, int)
+                            and not isinstance(prompt_tokens, bool)
+                            and prompt_tokens >= 0
+                            and isinstance(completion_tokens, int)
+                            and not isinstance(completion_tokens, bool)
+                            and completion_tokens >= 0
+                        ):
+                            chunks.put(("usage", {
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                                "total_tokens": prompt_tokens + completion_tokens,
+                                "finish_reason": str(
+                                    getattr(final_response, "finish_reason", None) or "stop"
+                                ),
+                                "peak_memory": getattr(final_response, "peak_memory", None),
+                            }))
                     chunks.put((_DONE, None))
             except Exception as e:  # surfaced to the caller below
                 chunks.put(("error", e))
@@ -576,6 +612,9 @@ class LLMManager:
                 kind, payload = chunks.get()
                 if kind == "chunk":
                     yield payload
+                elif kind == "usage":
+                    if usage_callback is not None:
+                        usage_callback(payload)
                 elif kind == "error":
                     raise RuntimeError(str(payload))
                 else:
@@ -609,6 +648,49 @@ class LLMManager:
         string. Used by callers that don't need token-by-token output."""
         return "".join(
             self.stream_chat(repo, messages, temperature, max_tokens, top_p, images)
+        )
+
+    def chat_once_with_usage(
+        self,
+        repo: Optional[str],
+        messages: list[dict],
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        top_p: float = 1.0,
+        images: Optional[list] = None,
+    ) -> ChatGenerationResult:
+        """Return a complete response only when MLX reports exact token usage."""
+        evidence: dict = {}
+        text = "".join(self.stream_chat(
+            repo,
+            messages,
+            temperature,
+            max_tokens,
+            top_p,
+            images,
+            usage_callback=evidence.update,
+        ))
+        required = ("prompt_tokens", "completion_tokens", "total_tokens")
+        if any(
+            isinstance(evidence.get(field), bool)
+            or not isinstance(evidence.get(field), int)
+            or evidence[field] < 0
+            for field in required
+        ):
+            raise RuntimeError("local generation did not return verified token usage")
+        if evidence["total_tokens"] < evidence["prompt_tokens"] + evidence["completion_tokens"]:
+            raise RuntimeError("local generation returned inconsistent token usage")
+        return ChatGenerationResult(
+            text=text,
+            prompt_tokens=evidence["prompt_tokens"],
+            completion_tokens=evidence["completion_tokens"],
+            total_tokens=evidence["total_tokens"],
+            finish_reason=str(evidence.get("finish_reason") or "stop"),
+            peak_memory=(
+                float(evidence["peak_memory"])
+                if isinstance(evidence.get("peak_memory"), (int, float))
+                else None
+            ),
         )
 
 

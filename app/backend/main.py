@@ -447,6 +447,11 @@ def get_catalog() -> dict:
     for m in catalog.CATALOG:
         d = catalog.serialize_model(m)
         d["cache"] = cache.status_snapshot(m.repo)
+        revision = cache.snapshot_revision(m.repo)
+        if revision is not None and not llm_engine.is_vision_model(m.repo):
+            d["runtime_revision"] = revision
+            d["max_output_tokens"] = 32768
+            d["verified_token_usage"] = True
         active = manager.active_for_repo(m.repo)
         d["active_download"] = active.serialize() if active else None
         models.append(d)
@@ -1220,7 +1225,7 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     try:
-        text = llm_engine.manager.chat_once(
+        result = llm_engine.manager.chat_once_with_usage(
             body.model, messages, body.temperature, body.max_tokens, body.top_p,
         )
     except RuntimeError as e:
@@ -1233,14 +1238,16 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
         "model": body.model,
         "choices": [{
             "index": 0,
-            "message": {"role": "assistant", "content": text},
-            "finish_reason": "stop",
+            "message": {"role": "assistant", "content": result.text},
+            "finish_reason": result.finish_reason,
         }],
         "usage": {
-            "prompt_tokens": None,
-            "completion_tokens": None,
-            "total_tokens": None,
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
+            "total_tokens": result.total_tokens,
         },
+        "usage_verified": True,
+        "model_revision": cache.snapshot_revision(body.model),
     }
 
 
