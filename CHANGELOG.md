@@ -10,6 +10,22 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.3] — 2026-07-23
+
+### Changed — fleet retention now defaults to 30 days
+
+- Raised the shared fleet backup-retention value from 3 days to 30 days while
+  keeping the 80 GB hard cap. Chat history and model data remain protected and
+  outside cleanup scope.
+- Existing 3-day policy records migrate automatically once during update.
+  Explicit choices saved afterward remain respected, eliminating per-worker
+  setup.
+
+### Verification
+
+- Added migration and post-migration override regression coverage. **Just run
+  Update.**
+
 ## [1.24.2] — 2026-07-23
 
 ### Fixed — watchdog restarts require confirmed health failure

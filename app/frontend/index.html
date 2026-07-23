@@ -619,7 +619,7 @@
           <label class="storage-policy-field"><span>Fleet cap</span><div class="storage-policy-number"><input type="number" min="1" max="1000" step="1" x-model.number="storagePolicy.max_gb"><span>GB</span></div></label>
           <div class="storage-policy-actions"><button class="ghost" :disabled="storagePolicy.busy" @click="cleanStoragePolicyNow()">Check now</button><button class="primary" :disabled="storagePolicy.busy" @click="saveStoragePolicy()" x-text="storagePolicy.busy ? 'Saving…' : 'Save policy'"></button></div>
         </div>
-        <p class="storage-policy-note" x-text="storagePolicy.message || 'The shared 3-day / 80 GB policy is recorded for fleet consistency, but there is nothing disposable for Chat Studio to delete.'"></p>
+        <p class="storage-policy-note" x-text="storagePolicy.message || 'The shared 30-day / 80 GB policy is recorded for fleet consistency, but there is nothing disposable for Chat Studio to delete.'"></p>
       </section>
 
       <div class="settings-section-title">

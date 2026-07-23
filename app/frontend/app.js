@@ -103,7 +103,7 @@ function studio() {
       draft:{mode:"off",frequency:"daily",maintenance_hour:3,idle_only:true},
       dirty:false,
     },
-    storagePolicy: { enabled:true, retention_days:3, max_gb:80, used_bytes:0, supported:false, loaded:false, busy:false, message:"" },
+    storagePolicy: { enabled:true, retention_days:30, max_gb:80, used_bytes:0, supported:false, loaded:false, busy:false, message:"" },
     memoryPolicy: {
       mode:"performance", default_mode:"performance", idle_seconds:null,
       loaded_model:null, model_idle_seconds:null, next_release_at:null,
