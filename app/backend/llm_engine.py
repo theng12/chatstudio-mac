@@ -18,6 +18,7 @@ import base64
 import os
 import queue
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -29,6 +30,41 @@ from . import cache
 
 _MAX_IMAGES = 4
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MEMORY_RETRY_LIMIT = 1
+MEMORY_RESTART_FAILURES = 2
+
+
+def _memory_snapshot() -> Optional[dict]:
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        return {
+            "total_gb": round(vm.total / 1e9, 2),
+            "available_gb": round(vm.available / 1e9, 2),
+            "used_gb": round(vm.used / 1e9, 2),
+            "percent": float(vm.percent),
+        }
+    except Exception:
+        return None
+
+
+def _is_memory_failure(exc: BaseException) -> bool:
+    """Recognize allocator failures without treating provider/input errors as OOM."""
+    if isinstance(exc, MemoryError):
+        return True
+    message = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        marker in message
+        for marker in (
+            "out of memory",
+            "out-of-memory",
+            "cannot allocate memory",
+            "failed to allocate memory",
+            "metal allocation failed",
+            "mlx allocation failed",
+            "std::bad_alloc",
+        )
+    )
 
 
 def _decode_images(images: Optional[list]) -> tuple[list, list]:
@@ -229,6 +265,10 @@ class LLMManager:
         # user switched to a cloud model), free it after an idle timeout.
         self._last_used: float = 0.0
         self._last_auto_unload: Optional[dict] = None
+        self._consecutive_memory_failures = 0
+        self._last_memory_event: Optional[dict] = None
+        self._restart_scheduled = False
+        self._restart_timer_started = False
 
     def touch(self) -> None:
         self._last_used = time.time()
@@ -241,6 +281,15 @@ class LLMManager:
 
     def last_auto_unload(self) -> Optional[dict]:
         return self._last_auto_unload
+
+    def memory_status(self) -> dict:
+        return {
+            "snapshot": _memory_snapshot(),
+            "consecutive_failures": self._consecutive_memory_failures,
+            "restart_scheduled": self._restart_scheduled,
+            "last_event": self._last_memory_event,
+            "service_supervised": self._service_installed(),
+        }
 
     def is_busy(self) -> bool:
         """True while a model load or queued/running generation owns MLX."""
@@ -283,11 +332,38 @@ class LLMManager:
     def load(self, repo: str) -> dict:
         """Load `repo` into memory (unloading any previous model first). Runs on
         the dedicated MLX worker thread; blocks the caller until done."""
+        def _load_with_recovery() -> dict:
+            for attempt in range(MEMORY_RETRY_LIMIT + 1):
+                try:
+                    result = self._load_sync(repo)
+                    self._consecutive_memory_failures = 0
+                    return result
+                except Exception as exc:
+                    if not _is_memory_failure(exc):
+                        self._consecutive_memory_failures = 0
+                        raise
+                    self._record_memory_failure_sync(exc)
+                    if attempt < MEMORY_RETRY_LIMIT and not self._restart_scheduled:
+                        print(
+                            "[chat] retrying local model load once after memory recovery",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+                    if self._restart_scheduled:
+                        raise RuntimeError(
+                            "Repeated memory failures; Chat Studio is restarting "
+                            "automatically under launchd supervision."
+                        ) from exc
+                    raise
+            raise RuntimeError("local model load recovery exhausted")
+
         self._busy.set()
         try:
-            return self._exec.submit(self._load_sync, repo).result()
+            return self._exec.submit(_load_with_recovery).result()
         finally:
             self._busy.clear()
+            self._start_scheduled_restart()
 
     def ensure_loaded(self, repo: Optional[str]) -> str:
         """Make `repo` the active model, loading it on demand if it's cached but
@@ -417,6 +493,75 @@ class LLMManager:
             self._last_auto_unload = {"repo": repo, "at": time.time(), "reason": reason}
         return {"released": bool(repo), "repo": repo, "actions": actions}
 
+    @staticmethod
+    def _service_installed() -> bool:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        return os.path.isfile(os.path.join(root, "service", ".installed"))
+
+    def _evict_after_memory_failure_sync(self) -> None:
+        """Drop the active model from the dedicated MLX thread."""
+        with self._lock:
+            self._loaded = None
+        import gc
+        gc.collect()
+        try:
+            import mlx.core as mx
+            synchronize = getattr(mx, "synchronize", None)
+            if callable(synchronize):
+                synchronize()
+            clear_cache = getattr(mx, "clear_cache", None)
+            if callable(clear_cache):
+                clear_cache()
+        except Exception:
+            pass
+
+    def _record_memory_failure_sync(self, exc: BaseException) -> None:
+        self._consecutive_memory_failures += 1
+        self._last_memory_event = {
+            "time": time.time(),
+            "error_type": type(exc).__name__,
+            "snapshot": _memory_snapshot(),
+        }
+        self._evict_after_memory_failure_sync()
+        print(
+            f"[chat] verified memory failure {self._consecutive_memory_failures}/"
+            f"{MEMORY_RESTART_FAILURES}; local model and MLX cache evicted",
+            file=sys.stderr,
+            flush=True,
+        )
+        if (
+            self._consecutive_memory_failures < MEMORY_RESTART_FAILURES
+            or self._restart_scheduled
+        ):
+            return
+        if not self._service_installed():
+            print(
+                "[chat] repeated memory failures without startup-service "
+                "supervision; keeping Chat Studio alive",
+                file=sys.stderr,
+                flush=True,
+            )
+            return
+        self._restart_scheduled = True
+
+    def _start_scheduled_restart(self) -> None:
+        if not self._restart_scheduled or self._restart_timer_started:
+            return
+        self._restart_timer_started = True
+
+        def _exit_for_launchd() -> None:
+            print(
+                "[chat] restarting after repeated memory failures; launchd "
+                "KeepAlive will restore Chat Studio",
+                file=sys.stderr,
+                flush=True,
+            )
+            os._exit(75)
+
+        timer = threading.Timer(0.75, _exit_for_launchd)
+        timer.daemon = True
+        timer.start()
+
     def _unload_sync(self) -> bool:
         with self._lock:
             if self._loaded is None:
@@ -532,52 +677,116 @@ class LLMManager:
             image_paths, temp_paths = _decode_images(images)
 
         loaded, prompt = self.build_prompt(repo, messages, num_images=len(image_paths))
+        target_repo = getattr(loaded, "repo", None) or repo
+        if not target_repo:
+            raise RuntimeError("Local model identity is unavailable for safe recovery")
+        del loaded_peek
 
         chunks: "queue.Queue" = queue.Queue()
         _DONE = object()
 
+        def _run_attempt(current_loaded, current_prompt, state: dict):
+            final_response = None
+            if current_loaded.kind == "vlm":
+                from mlx_vlm import stream_generate as vlm_stream
+                for response in vlm_stream(
+                    current_loaded.model,
+                    current_loaded.tokenizer,
+                    current_prompt,
+                    image=(image_paths or None),
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                ):
+                    final_response = response
+                    text = getattr(response, "text", None)
+                    if text:
+                        state["emitted"] = True
+                        chunks.put(("chunk", text))
+                    if self._cancel.is_set():
+                        break
+                return final_response
+
+            from mlx_lm import stream_generate
+            from mlx_lm.sample_utils import make_sampler
+            sampler = make_sampler(temp=temperature, top_p=top_p)
+            for response in stream_generate(
+                current_loaded.model,
+                current_loaded.tokenizer,
+                current_prompt,
+                max_tokens=max_tokens,
+                sampler=sampler,
+            ):
+                final_response = response
+                text = getattr(response, "text", None)
+                if text:
+                    state["emitted"] = True
+                    chunks.put(("chunk", text))
+                if self._cancel.is_set():
+                    break
+            return final_response
+
         def _generate():
+            nonlocal loaded, prompt
             # Reset cancellation on the worker right before generating, so a
             # second request arriving while this one is queued can't clear a
             # cancel meant for the generation that's actually running.
             self._cancel.clear()
             try:
-                final_response = None
-                if loaded.kind == "vlm":
-                    # Vision-language generation via mlx-vlm. Text-only turns
-                    # (no image attached) still work — image is just None.
-                    from mlx_vlm import stream_generate as vlm_stream
-                    for response in vlm_stream(
-                        loaded.model, loaded.tokenizer, prompt,
-                        image=(image_paths or None),
-                        max_tokens=max_tokens, temperature=temperature, top_p=top_p,
-                    ):
-                        final_response = response
-                        text = getattr(response, "text", None)
-                        if text:
-                            chunks.put(("chunk", text))
-                        if self._cancel.is_set():
-                            break
-                    chunks.put((_DONE, None))
-                else:
-                    from mlx_lm import stream_generate
-                    from mlx_lm.sample_utils import make_sampler
-                    sampler = make_sampler(temp=temperature, top_p=top_p)
-                    for response in stream_generate(
-                        loaded.model, loaded.tokenizer, prompt,
-                        max_tokens=max_tokens, sampler=sampler,
-                    ):
-                        final_response = response
-                        text = getattr(response, "text", None)
-                        if text:
-                            chunks.put(("chunk", text))
-                        # Stop generating as soon as a cancel is requested — this
-                        # is what frees the GPU, not just closing the socket.
-                        if self._cancel.is_set():
-                            break
-                    if final_response is not None:
+                attempt = 0
+                reload_required = False
+                while True:
+                    state = {"emitted": False}
+                    retry = False
+                    try:
+                        if reload_required:
+                            self._load_sync(target_repo)
+                            loaded, prompt = self.build_prompt(
+                                target_repo,
+                                messages,
+                                num_images=len(image_paths),
+                            )
+                            reload_required = False
+                        final_response = _run_attempt(loaded, prompt, state)
+                    except Exception as exc:
+                        if _is_memory_failure(exc):
+                            self._record_memory_failure_sync(exc)
+                            retry = (
+                                not state["emitted"]
+                                and attempt < MEMORY_RETRY_LIMIT
+                                and not self._restart_scheduled
+                            )
+                        else:
+                            self._consecutive_memory_failures = 0
+                        if not retry:
+                            if self._restart_scheduled:
+                                exc = RuntimeError(
+                                    "Repeated memory failures; Chat Studio is "
+                                    "restarting automatically under launchd supervision."
+                                )
+                            chunks.put(("error", exc))
+                            return
+                        # Drop the failed model reference before the next loop
+                        # reloads it on this same MLX worker thread.
+                        loaded = None
+                        prompt = ""
+                    if retry:
+                        attempt += 1
+                        reload_required = True
+                        print(
+                            "[chat] retrying once because memory failed before "
+                            "the first output token",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+
+                    self._consecutive_memory_failures = 0
+                    if final_response is not None and loaded.kind != "vlm":
                         prompt_tokens = getattr(final_response, "prompt_tokens", None)
-                        completion_tokens = getattr(final_response, "generation_tokens", None)
+                        completion_tokens = getattr(
+                            final_response, "generation_tokens", None
+                        )
                         if (
                             isinstance(prompt_tokens, int)
                             and not isinstance(prompt_tokens, bool)
@@ -593,11 +802,12 @@ class LLMManager:
                                 "finish_reason": str(
                                     getattr(final_response, "finish_reason", None) or "stop"
                                 ),
-                                "peak_memory": getattr(final_response, "peak_memory", None),
+                                "peak_memory": getattr(
+                                    final_response, "peak_memory", None
+                                ),
                             }))
                     chunks.put((_DONE, None))
-            except Exception as e:  # surfaced to the caller below
-                chunks.put(("error", e))
+                    return
             finally:
                 for p in temp_paths:
                     try:
@@ -634,6 +844,7 @@ class LLMManager:
             finally:
                 self.touch()
                 self._busy.clear()
+                self._start_scheduled_restart()
 
     def chat_once(
         self,

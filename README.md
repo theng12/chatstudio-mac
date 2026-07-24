@@ -67,6 +67,14 @@ PUT  /api/memory-policy   # { "mode": "performance|balanced|memory_saver|immedia
 POST /api/memory/release
 ```
 
+Verified MLX allocator failures receive one automatic recovery attempt after
+the local model and cache are evicted. Streaming generation is retried only
+before the first token; once text has been emitted, Chat Studio never replays
+the response and instead lets the upstream idempotent request recover the whole
+attempt. Repeated allocator failures request a supervised restart when the
+startup service is installed. `/api/health` and `/api/chat/diagnostics` expose
+privacy-safe memory and bounded watchdog restart-rate evidence for Studio Hub.
+
 After Update and the next normal restart, Activity Monitor labels the backend
 **Chat Studio Mac** instead of a generic Python process. Python remains the
 runtime underneath the friendly title.

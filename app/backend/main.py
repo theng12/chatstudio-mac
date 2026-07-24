@@ -270,6 +270,7 @@ def health() -> dict:
         "loaded_model": llm_engine.manager.loaded_repo(),
         "idle_seconds": llm_engine.manager.idle_seconds(),
         "auto_unload": llm_engine.manager.last_auto_unload(),
+        "memory": llm_engine.manager.memory_status()["snapshot"],
         # Read-only operational evidence for Studio Hub. This never changes
         # dispatch or service state and is bounded to the newest 1 MB of logs.
         "restart_rate": restart_health.snapshot(),
@@ -836,6 +837,8 @@ def connectivity(request: Request) -> dict:
 def chat_diagnostics() -> dict:
     data = llm_engine.diagnostics()
     data["app_version"] = APP_VERSION
+    data["memory_recovery"] = llm_engine.manager.memory_status()
+    data["restart_rate"] = restart_health.snapshot()
     return data
 
 

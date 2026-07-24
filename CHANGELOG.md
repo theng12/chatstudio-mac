@@ -10,6 +10,28 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.4] — 2026-07-24
+
+### Fixed — MLX memory recovery without duplicated streamed text
+
+- Local model loading and chat generation now distinguish verified allocator
+  exhaustion from authentication, validation, provider, cancellation, and
+  other ordinary errors. Chat Studio evicts the failed local model and MLX
+  cache, then retries once.
+- A generation retry is permitted only before the first output token. If any
+  text has already streamed, Chat Studio returns the interruption without
+  replaying the model, preventing duplicated customer-visible output; the
+  upstream idempotent request remains responsible for whole-attempt recovery.
+- Repeated verified memory failures request a launchd-supervised restart, while
+  health and diagnostics expose privacy-safe memory and the existing bounded
+  watchdog restart-rate evidence for Studio Hub alerts.
+
+### Verification
+
+- Added regression coverage for model-load recovery, pre-token retry,
+  no-replay after the first token, repeated-failure restart, classifier
+  exclusions, and existing native-token usage preservation. **Just run Update.**
+
 ## [1.24.3] — 2026-07-23
 
 ### Changed — fleet retention now defaults to 30 days
