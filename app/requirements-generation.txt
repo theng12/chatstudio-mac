@@ -5,3 +5,6 @@ mlx-lm==0.31.3
 mlx-vlm==0.6.4
 transformers==5.12.1
 tokenizers==0.22.2
+# Host memory sizing for the idle-release policy's machine-aware default
+# (memory_policy.default_mode) — memory_saver under 12 GB, balanced above.
+psutil>=7.0
