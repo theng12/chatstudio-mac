@@ -10,6 +10,79 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.7] — 2026-08-08
+
+### Fixed — the mode picker still called Performance the default
+
+- v1.24.6 made the default depend on the host's memory, but the settings UI
+  still hardcoded "Performance · default". On every 8 GB machine — which is
+  most of the fleet — that label was simply false, and it pointed the owner
+  at the exact mode that caused the thrash.
+- The badge is now bound to the `default_mode` the backend actually reports,
+  so it follows the machine instead of a constant. Test asserts the
+  hardcoded label is gone and that all four modes are bound.
+- Voice Studio shipped the identical fix as v1.32.5; this matches that
+  wording so the fleet stays consistent.
+
+### Fixed — `psutil` was not a declared base dependency
+
+- `memory_policy.default_mode()` imports `psutil` unconditionally on every
+  install to size the machine-aware default, but `psutil` was only listed in
+  `requirements-generation.txt` — the optional/reinstallable MLX stack, not
+  the base install `install.js` actually runs (`requirements.lock.txt`).
+- On a genuinely fresh install, `psutil` would be missing; the
+  `ImportError` is caught and swallowed inside `default_mode()`, silently
+  falling back to `DEFAULT_MODE` ("balanced") regardless of host memory —
+  quietly defeating the exact fix v1.24.6 shipped, on the machines that need
+  it most. This checkout's own `conda_env` happened to have `psutil` 7.2.2
+  installed already (not from a fresh `install.js` run), which is why the
+  gap wasn't visible locally.
+- Added `psutil>=7.0` to `requirements.txt` and pinned `psutil==7.2.2` in
+  `requirements.lock.txt` so the base install always has it. Left the entry
+  in `requirements-generation.txt` too, so the reinstall/repair path stays
+  self-contained.
+
+## [1.24.6] — 2026-08-08
+
+### Fixed — the shipped memory policy could never fire
+
+- The idle-release mechanism is fully implemented and its background thread
+  has been running on every machine the whole time, waking every 5 s. It just
+  had nothing to do: the shipped default is `performance`, whose
+  `idle_seconds` is `None`, so `run_due_release()` returned immediately every
+  single time.
+- This is not a Chat Studio bug so much as a shared-assumption bug. Image,
+  Voice, Video and Music Studio all ship the *same* skeleton with the *same*
+  `DEFAULT_MODE = "performance"`. That default is reasonable for an app that
+  owns its machine. The actual deployment puts 3-5 of them on one 8 GB Mac,
+  where each independently concludes that pinning its local model forever is
+  free.
+- Measured fleet-wide 2026-08-07: 16 of 19 machines sat below the memory
+  guard's 3.2 GB floor with 1.5-4.4 GB of swap burned and could not start a
+  job at all.
+- The default is now chosen from the host's own memory — `memory_saver`
+  (120 s) below 12 GB, `balanced` (600 s) above — instead of assuming a
+  machine alone. An operator's explicit choice, persisted in
+  `memory_policy.json`, still wins; `performance` remains available and still
+  pins when asked for.
+- Note this only fixes *fresh installs*. `memory_policy.json` is gitignored,
+  so an in-place Update or Reset never resets an operator-chosen mode.
+- **The same one-line default is still shipped by Image, Voice, Video and
+  Music Studio.** Those are separate products with their own release flows
+  and are not changed here.
+- `requirements-generation.txt` now pins `psutil>=7.0` so the machine-aware
+  default can read the host's total memory once the local generation stack is
+  installed; before that point the module falls back to the size-unaware
+  `balanced` default rather than raising.
+
+### Verification
+
+- Added regression coverage: an explicit `performance` choice still pins the
+  local model, the unopinionated default now actually releases on idle,
+  `default_mode()` selects `memory_saver` at 8.6 GB and `balanced` at 25.8 GB,
+  and a persisted operator choice still overrides the machine default. Full
+  backend test suite passes.
+
 ## [1.24.5] — 2026-07-24
 
 ### Fixed — Pinokio 8 maintenance crash
