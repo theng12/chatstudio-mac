@@ -10,6 +10,38 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.24.7] — 2026-08-08
+
+### Fixed — the mode picker still called Performance the default
+
+- v1.24.6 made the default depend on the host's memory, but the settings UI
+  still hardcoded "Performance · default". On every 8 GB machine — which is
+  most of the fleet — that label was simply false, and it pointed the owner
+  at the exact mode that caused the thrash.
+- The badge is now bound to the `default_mode` the backend actually reports,
+  so it follows the machine instead of a constant. Test asserts the
+  hardcoded label is gone and that all four modes are bound.
+- Voice Studio shipped the identical fix as v1.32.5; this matches that
+  wording so the fleet stays consistent.
+
+### Fixed — `psutil` was not a declared base dependency
+
+- `memory_policy.default_mode()` imports `psutil` unconditionally on every
+  install to size the machine-aware default, but `psutil` was only listed in
+  `requirements-generation.txt` — the optional/reinstallable MLX stack, not
+  the base install `install.js` actually runs (`requirements.lock.txt`).
+- On a genuinely fresh install, `psutil` would be missing; the
+  `ImportError` is caught and swallowed inside `default_mode()`, silently
+  falling back to `DEFAULT_MODE` ("balanced") regardless of host memory —
+  quietly defeating the exact fix v1.24.6 shipped, on the machines that need
+  it most. This checkout's own `conda_env` happened to have `psutil` 7.2.2
+  installed already (not from a fresh `install.js` run), which is why the
+  gap wasn't visible locally.
+- Added `psutil>=7.0` to `requirements.txt` and pinned `psutil==7.2.2` in
+  `requirements.lock.txt` so the base install always has it. Left the entry
+  in `requirements-generation.txt` too, so the reinstall/repair path stays
+  self-contained.
+
 ## [1.24.6] — 2026-08-08
 
 ### Fixed — the shipped memory policy could never fire
