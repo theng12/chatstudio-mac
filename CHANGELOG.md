@@ -10,6 +10,41 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.25.0] — 2026-08-09
+
+### Changed — Chat Studio is local-only
+
+- Removed the hosted-model provider catalog, API-key management, paid-model
+  switches, live provider discovery, and cloud request adapters. Hugging Face
+  access remains only for downloading MLX weights.
+- Removed Uninterrupted Mode and its cloud fallback router, health polling,
+  priority controls, stream sentinel, and continuation UI. Local MLX chat,
+  vision input, saved history, downloads, and both native and OpenAI-compatible
+  completion endpoints remain.
+- `/v1/models` now reports cached local models only. Old `provider:*` model IDs
+  receive a clear HTTP 400 response instead of being routed or silently
+  accepted; existing conversation history remains readable.
+- Removed three retired backend modules and their cloud-only test script, then
+  deleted the matching settings, frontend controls, styles, environment keys,
+  and operator documentation. Existing provider keys in a user's disposable
+  `settings.json` are ignored and are never exposed by the settings API.
+
+### Preserved — fleet and memory contracts
+
+- Kept fleet authentication, health/catalog discovery, Studio Hub integration,
+  idle-aware automatic updates, model memory policy, explicit memory release,
+  restart-rate evidence, and protected conversation/model storage.
+- Kept the machine-aware default: Macs below 12 GB start in Memory Saver mode
+  and release an idle local model after two minutes; explicit operator choices
+  still win.
+
+### Verification
+
+- Added regression coverage for removed routes, stale provider IDs, the reduced
+  settings response, frontend controls, and environment credentials.
+- Passed JavaScript syntax checking, Python compilation, the full Chat Studio
+  test suite, release metadata validation, and Git whitespace validation.
+
 ## [1.24.7] — 2026-08-08
 
 ### Fixed — the mode picker still called Performance the default

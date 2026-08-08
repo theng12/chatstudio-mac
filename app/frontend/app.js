@@ -24,7 +24,6 @@ function studio() {
     fitFilter: "all",
     capFilter: "all",
     sortBy: "default",
-    modelScope: "local",
     modelAdvancedOpen: false,
     openModelFamilies: new Set(),
     expandedModelRepos: new Set(),
@@ -48,23 +47,6 @@ function studio() {
     // ── chat ──
     diag: { available: false, error: null, packages: [] },
     depInstall: { running: false, result: null },
-    continueState: null,   // {messageIndex, excludeIds, provider} when a stream broke mid-answer
-    continuing: false,
-
-    // ── cloud providers ──
-    providers: [],
-    providerSearch: "",
-    focusedProvider: "",
-    providerKeyInputs: {},
-    providerSaving: null,
-    providerTests: {},
-    liveModels: {},        // { providerKey: [{id, repo}] } fetched on demand
-    liveLoading: null,
-    modelTab: null,        // 'local' | 'cloud' (free) | 'paid' (null = auto-pick)
-    showAllProviders: false, // cloud tab: also show providers with no key (greyed)
-    routerProviders: [],   // ordered fallback list {id,name,kind,enabled,key_set}
-    providerHealth: {},    // { id: 'online'|'offline'|'rate_limited'|'no_key'|'slow'|'unknown' }
-    healthLoading: false,
     chatModels: [],
     currentRepo: null,
     selectedRepo: "",
@@ -122,7 +104,6 @@ function studio() {
     // ════════════ lifecycle ════════════
     async init() {
       this.loadGen();
-      this.loadLive();
       await this.refreshReleaseNotes();
       await this.refreshHealth();
       await this.refreshSystem();
@@ -131,7 +112,6 @@ function studio() {
       await this.refreshCatalog();
       await this.refreshDiagnostics();
       await this.refreshChatModels();
-      await this.refreshProviders();
       await this.refreshStoragePolicy();
       await this.refreshMemoryPolicy(true, true);
       this.initModelLibrary();
@@ -144,10 +124,6 @@ function studio() {
         if (this.tab === "settings" || ["checking","updating","restarting","deferred"].includes(this.autoUpdate.state)) this.refreshAutoUpdate(true);
         if (this.tab === "settings") this.refreshMemoryPolicy(true);
       }, 5000);
-      // Provider health (Uninterrupted Mode): on launch + every 5 minutes.
-      this.refreshRouterProviders();
-      this.refreshProviderHealth();
-      setInterval(() => this.refreshProviderHealth(), 300000);
       // Auto-load the default model on startup if it's cached
       if (this.gen.defaultModel && this.diag.available) {
         const cached = this.models.find(m => m.repo === this.gen.defaultModel && m.cache?.state === "cached");
@@ -161,9 +137,9 @@ function studio() {
     go(tab) {
       this.tab = tab;
       if (tab === "chat") { this.refreshDiagnostics(); this.refreshChatModels(); }
-      if (tab === "models") { this.refreshCatalog(); this.refreshProviders(); }
+      if (tab === "models") this.refreshCatalog();
       if (tab === "api") this.refreshConnectivity();
-      if (tab === "settings") { this.refreshSettings(); this.refreshAutoUpdate(true); this.refreshMemoryPolicy(true); this.refreshStoragePolicy(); this.refreshConnectivity(); this.refreshDiagnostics(); this.refreshProviders(); this.refreshRouterProviders(); this.refreshProviderHealth(); }
+      if (tab === "settings") { this.refreshSettings(); this.refreshAutoUpdate(true); this.refreshMemoryPolicy(true); this.refreshStoragePolicy(); this.refreshConnectivity(); this.refreshDiagnostics(); }
     },
 
     async refreshAll() {
@@ -247,114 +223,16 @@ function studio() {
     },
     async refreshChatModels() {
       try {
-        const [local, prov] = await Promise.all([
-          fetch(`${this.apiBase}/api/chat/models`).then(r => r.json()).catch(() => ({models: []})),
-          fetch(`${this.apiBase}/api/providers`).then(r => r.json()).catch(() => ({providers: []})),
-        ]);
-        const locals = (local.models || []).map(m => ({...m, source: 'local'}));
-        const clouds = [];
-        for (const p of (prov.providers || [])) {
-          for (const m of p.models) {
-            // Paid models are kept in the list so the 💳 Paid tab can show
-            // them — the tab renders the group disabled (with a hint) until
-            // the provider's paid toggle is on, and the server 403s any
-            // attempt to route a paid model without the toggle regardless.
-            clouds.push({
-              repo: m.repo,
-              label: m.label + (m.free ? '' : ' 💲'),
-              source: 'cloud',
-              provider: p.key,
-              provider_name: p.name,
-              notes: m.notes,
-              key_set: p.key_set,
-              free: m.free,
-              paid_enabled: p.paid_enabled,
-            });
-          }
-        }
-        // Live-fetched models (loaded on demand per provider) — appended and
-        // deduped against curated, so the dropdown can reflect a provider's
-        // full current catalog instead of only the hardcoded list.
-        const provByKey = {};
-        for (const p of (prov.providers || [])) provByKey[p.key] = p;
-        const have = new Set(clouds.map(c => c.repo));
-        for (const [pkey, models] of Object.entries(this.liveModels || {})) {
-          const p = provByKey[pkey];
-          if (!p) continue;
-          for (const m of (models || [])) {
-            if (have.has(m.repo)) continue;
-            have.add(m.repo);
-            // On an all-paid provider (fal, official OpenAI/Anthropic/
-            // DeepSeek) every live-fetched model bills the user's account —
-            // mark it paid so it lands in the 💳 tab behind the toggle, not
-            // in ☁ Free. Free-tier providers' live models stay free.
-            const isFree = !p.all_paid;
-            clouds.push({
-              repo: m.repo, label: m.id + (isFree ? '' : ' 💲'), source: 'cloud', provider: pkey,
-              provider_name: p.name, notes: 'live', key_set: p.key_set,
-              free: isFree, paid_enabled: p.paid_enabled, live: true,
-            });
-          }
-        }
-        this.chatModels = [...locals, ...clouds];
+        const local = await fetch(`${this.apiBase}/api/chat/models`).then(r => r.json());
+        this.chatModels = local.models || [];
         const loaded = this.chatModels.find(m => m.loaded);
         if (loaded) this.currentRepo = loaded.repo;
       } catch (e) {}
     },
-    // Which picker tab is showing — explicit choice, else Local if any local
-    // models exist, else Cloud.
-    effectiveModelTab() {
-      if (this.modelTab) return this.modelTab;
-      return this.chatModels.some(m => m.source === 'local') ? 'local' : 'cloud';
-    },
-    // Optgroups for the model <select>, scoped to the active tab.
-    //  · Local tab → one "Local (MLX)" group.
-    //  · Free tab → free cloud models, one group per provider (so identical
-    //    model names from different providers stay distinguishable).
-    //  · Paid tab → paid cloud models (💲); a provider's group stays disabled
-    //    until BOTH its key is set and its paid toggle is on, with the label
-    //    saying which one is missing.
-    // Keyless providers are hidden unless "show all" is on, then greyed.
     groupedModels() {
-      const tab = this.effectiveModelTab();
-      if (tab === 'local') {
-        const locals = this.chatModels.filter(m => m.source === 'local');
-        return locals.length ? [{ label: '🖥 Local (MLX)', models: locals, disabled: false }] : [];
-      }
-      const wantPaid = tab === 'paid';
-      const order = [];
-      const byProv = {};
-      for (const m of this.chatModels) {
-        if (m.source !== 'cloud') continue;
-        if (!!m.free === wantPaid) continue;   // free ↔ paid tab split
-        const k = m.provider || 'cloud';
-        if (!byProv[k]) {
-          byProv[k] = {
-            label: (wantPaid ? '💳 ' : '☁ ') + (m.provider_name || 'Cloud'),
-            models: [], key_set: !!m.key_set, paid_enabled: !!m.paid_enabled,
-          };
-          order.push(k);
-        }
-        byProv[k].models.push(m);
-      }
-      const groups = [];
-      for (const k of order) {
-        const g = byProv[k];
-        g.disabled = !g.key_set || (wantPaid && !g.paid_enabled);
-        if (!g.key_set && !this.showAllProviders) continue;  // keyless hidden by default
-        if (!g.key_set) g.label += ' — needs key';
-        else if (wantPaid && !g.paid_enabled) g.label += ' — enable paid in Settings';
-        groups.push(g);
-      }
-      return groups;
-    },
-    // Switch tab; keep selection valid for what's now shown.
-    setModelTab(tab) {
-      this.modelTab = tab;
-      const selectable = this.groupedModels().flatMap(g => g.disabled ? [] : g.models);
-      if (!selectable.find(m => m.repo === this.selectedRepo)) {
-        this.selectedRepo = (selectable[0] && selectable[0].repo) || "";
-      }
+      return this.chatModels.length
+        ? [{ label: '🖥 Local (MLX)', models: this.chatModels, disabled: false }]
+        : [];
     },
     async refreshSettings() {
       try { this.settings = await (await fetch(`${this.apiBase}/api/settings`)).json(); } catch (e) {}
@@ -559,49 +437,6 @@ function studio() {
       });
     },
     localModelCount() { return this.models.length; },
-    cloudModelCount() {
-      return this.providers.reduce((total, p) => total + this.cloudModelsFor(p, false).length, 0);
-    },
-    cloudModelsFor(provider, applySearch = true) {
-      const visible = (provider.models || []).filter(m => m.free || provider.paid_enabled);
-      const live = (this.liveModels[provider.key] || []).map(m => ({
-        id: m.id,
-        label: m.id,
-        notes: "Live provider catalog",
-        free: true,
-        live: true,
-        repo: m.repo,
-      }));
-      const seen = new Set();
-      return [...visible, ...live].filter(m => {
-        if (!m.repo || seen.has(m.repo)) return false;
-        seen.add(m.repo);
-        if (!applySearch || !this.modelSearch.trim()) return true;
-        const q = this.modelSearch.trim().toLowerCase();
-        return [m.label, m.id, m.notes, provider.name].some(v => String(v || "").toLowerCase().includes(q));
-      });
-    },
-    visibleCloudProviders() {
-      return this.providers.filter(p => this.cloudModelsFor(p).length > 0);
-    },
-    visibleScopeModelCount() {
-      if (this.modelScope === "cloud") {
-        return this.visibleCloudProviders().reduce((total, p) => total + this.cloudModelsFor(p).length, 0);
-      }
-      return this.visibleModelCount();
-    },
-    visibleScopeFamilyCount() {
-      return this.modelScope === "cloud" ? this.visibleCloudProviders().length : this.visibleFamilyCount();
-    },
-    setModelScope(scope) {
-      if (!['local', 'cloud'].includes(scope) || scope === this.modelScope) return;
-      this.modelScope = scope;
-      this.modelSearch = "";
-      this.fitFilter = "all";
-      this.capFilter = "all";
-      this.openModelFamilies = new Set();
-      this.openBestModelFamily();
-    },
     initModelLibrary() {
       if (!this.openModelFamilies.size) this.openBestModelFamily();
       // Remove preferences from older experiments that could silently hide
@@ -613,12 +448,6 @@ function studio() {
       } catch {}
     },
     openBestModelFamily() {
-      if (this.modelScope === "cloud") {
-        const ready = this.providers.find(p => p.key_set && this.cloudModelsFor(p).length);
-        const first = ready || this.visibleCloudProviders()[0];
-        this.openModelFamilies = new Set(first ? [`cloud:${first.key}`] : []);
-        return;
-      }
       const cached = this.models.find(m => m.cache?.state === "cached");
       const starter = this.models.find(m => m.is_starter && this.fitFor(m.min_unified_memory_gb).state !== "risky");
       const first = cached || starter || this.models[0];
@@ -724,18 +553,6 @@ function studio() {
       if (result.cache_state === "cached") return true;
       return this.jobs.some(j => j.repo === result.repo && j.state === "done");
     },
-    async useCloudModel(model, provider) {
-      if (!provider.key_set) {
-        this.go("settings");
-        this.showToast(`Add a ${provider.name} API key to use this model`);
-        return;
-      }
-      this.modelTab = "cloud";
-      this.currentRepo = model.repo;
-      this.selectedRepo = model.repo;
-      this.go("chat");
-    },
-
     // ════════════ model loading ════════════
     pickDefaultModel() {
       if (!this.selectedRepo) {
@@ -747,12 +564,6 @@ function studio() {
       if (this.selectedRepo && this.selectedRepo !== this.currentRepo) this.loadModel(this.selectedRepo);
     },
     async loadModel(repo) {
-      // Cloud models don't need a load step — just set them as current.
-      if (repo && repo.startsWith("provider:")) {
-        this.currentRepo = repo;
-        this.selectedRepo = repo;
-        return;
-      }
       this.loadingModel = repo;
       try {
         const r = await fetch(`${this.apiBase}/api/chat/load`, {
@@ -771,12 +582,11 @@ function studio() {
     },
     loadFromModels(repo) {
       // "Chat with this" button on the Models tab
-      this.modelTab = "local";
       this.go("chat");
       this.selectedRepo = repo;
       if (repo !== this.currentRepo) this.loadModel(repo);
     },
-    newChat() { this.stopGen(); this.messages = []; this.streamingText = ""; this.continueState = null; this.currentSessionId = null; },
+    newChat() { this.stopGen(); this.messages = []; this.streamingText = ""; this.currentSessionId = null; },
 
     // ════════════ chat sessions (history) ════════════
     async refreshSessions() {
@@ -794,8 +604,8 @@ function studio() {
         this.messages = (s.messages || []).map(m => ({ role: m.role, content: m.content, meta: m.meta }));
         this.currentSessionId = s.id;
         if (s.model) {
-          this.selectedRepo = s.model;                       // restore the model used
-          if (s.model.startsWith("provider:")) this.currentRepo = s.model;  // cloud needs no load
+          const local = this.chatModels.find(m => m.repo === s.model);
+          if (local) this.selectedRepo = s.model;
         }
         this.scrollThread();
       } catch (e) {}
@@ -902,7 +712,6 @@ function studio() {
       const text = this.draft.trim();
       const images = this.draftImages.slice();   // images for this turn only
       if ((!text && !images.length) || !this.currentRepo || this.streaming) return;
-      this.continueState = null;   // a new message supersedes any pending "continue"
       this.messages.push({ role: "user", content: text, images: images.length ? images : undefined });
       this.draft = "";
       this.draftImages = [];
@@ -939,26 +748,15 @@ function studio() {
         }
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
-        // Uninterrupted Mode appends a trailing "__CHATSTUDIO_META__{json}"
-        // sentinel saying which provider answered / whether it fell back.
-        // Strip it from the displayed text and parse it for the footer.
-        const MARK = "\n__CHATSTUDIO_META__";
         let raw = "";
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
           raw += decoder.decode(value, { stream: true });
-          const mi = raw.indexOf(MARK);
-          this.streamingText = mi >= 0 ? raw.slice(0, mi) : raw;
+          this.streamingText = raw;
           this.scrollThread();
         }
-        let providerMeta = null, finalText = raw;
-        const mi = raw.indexOf(MARK);
-        if (mi >= 0) {
-          try { providerMeta = JSON.parse(raw.slice(mi + MARK.length)); } catch (e) {}
-          finalText = raw.slice(0, mi);
-        }
-        this.finishAssistant(finalText, t0, false, providerMeta);
+        this.finishAssistant(raw, t0, false);
       } catch (e) {
         if (e && e.name === "AbortError") {
           this.finishAssistant(this.streamingText + " ⏹", t0, true);
@@ -974,76 +772,13 @@ function studio() {
         this.$nextTick(() => { const el = this.$refs.composer; if (el) el.focus(); });
       }
     },
-    finishAssistant(content, t0, stopped, providerMeta) {
+    finishAssistant(content, t0, stopped) {
       const secs = (performance.now() - t0) / 1000;
       const approxTok = Math.max(1, Math.round((content || "").length / 4));
       const tps = secs > 0 ? (approxTok / secs).toFixed(1) : "—";
-      let prefix = "";
-      if (providerMeta && providerMeta.provider) {
-        prefix = (providerMeta.interrupted ? "⚠ interrupted on " : "via ") + providerMeta.provider
-               + (providerMeta.fallback ? " ⤵ fell back" : "") + " · ";
-      }
-      const meta = prefix + `~${approxTok} tok · ${secs.toFixed(1)}s · ~${tps} tok/s` + (stopped ? " · stopped" : "");
+      const meta = `~${approxTok} tok · ${secs.toFixed(1)}s · ~${tps} tok/s` + (stopped ? " · stopped" : "");
       if ((content || "").trim()) {
         this.messages.push({ role: "assistant", content, meta });
-        if (providerMeta && providerMeta.interrupted) {
-          this.continueState = {
-            messageIndex: this.messages.length - 1,
-            excludeIds: providerMeta.provider_id ? [providerMeta.provider_id] : [],
-            provider: providerMeta.provider,
-          };
-        }
-      }
-    },
-    async continueGeneration() {
-      if (!this.continueState || this.streaming || this.continuing) return;
-      const st = this.continueState;
-      this.continueState = null;
-      this.continuing = true;
-      const idx = st.messageIndex;
-      const base = this.messages[idx].content + "\n";
-      // Send conversation up to + including the partial answer, then a hidden
-      // "continue" instruction, excluding the provider that just broke.
-      const payloadMsgs = [];
-      if (this.gen.system && this.gen.system.trim()) payloadMsgs.push({ role: "system", content: this.gen.system.trim() });
-      for (let i = 0; i <= idx; i++) payloadMsgs.push({ role: this.messages[i].role, content: this.messages[i].content });
-      payloadMsgs.push({ role: "user", content: "Continue your previous response from exactly where it stopped. Do not repeat anything you already wrote." });
-
-      this._abort = new AbortController();
-      try {
-        const r = await fetch(`${this.apiBase}/api/chat/completions`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          signal: this._abort.signal,
-          body: JSON.stringify({
-            repo: this.currentRepo, messages: payloadMsgs,
-            temperature: this.gen.temperature, max_tokens: this.gen.maxTokens, top_p: this.gen.topP,
-            stream: true, exclude_providers: st.excludeIds,
-          }),
-        });
-        if (!r.ok || !r.body) { const e = await r.json().catch(() => ({})); alert(e.detail || "Continue failed"); return; }
-        const reader = r.body.getReader(); const decoder = new TextDecoder();
-        const MARK = "\n__CHATSTUDIO_META__";
-        let raw = "";
-        while (true) {
-          const { value, done } = await reader.read(); if (done) break;
-          raw += decoder.decode(value, { stream: true });
-          const mi = raw.indexOf(MARK);
-          this.messages[idx].content = base + (mi >= 0 ? raw.slice(0, mi) : raw);
-          this.scrollThread();
-        }
-        const mi = raw.indexOf(MARK); let meta = null, tail = raw;
-        if (mi >= 0) { try { meta = JSON.parse(raw.slice(mi + MARK.length)); } catch (e) {} tail = raw.slice(0, mi); }
-        this.messages[idx].content = base + tail;
-        if (meta && meta.provider) {
-          this.messages[idx].meta = (meta.interrupted ? "⚠ interrupted again on " : "continued via ") + meta.provider + (meta.fallback ? " ⤵" : "");
-          if (meta.interrupted) {
-            this.continueState = { messageIndex: idx, excludeIds: [...st.excludeIds, meta.provider_id].filter(Boolean), provider: meta.provider };
-          }
-        }
-      } catch (e) {
-        if (!(e && e.name === "AbortError")) alert(String(e));
-      } finally {
-        this.continuing = false; this._abort = null; this.scrollThread();
       }
     },
     stopGen() {
@@ -1150,16 +885,6 @@ function studio() {
       this.tokenTest = { ok: false, msg: "" };
       await this.refreshSettings();
     },
-    async saveUninterrupted() {
-      await fetch(`${this.apiBase}/api/settings`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          uninterrupted_mode: !!this.settings.uninterrupted_mode,
-          request_timeout: Number(this.settings.request_timeout) || 60,
-        }),
-      });
-      await this.refreshSettings();
-    },
     async testToken() {
       this.tokenTest = { ok: false, msg: "Testing…" };
       try {
@@ -1172,144 +897,6 @@ function studio() {
         else this.tokenTest = { ok: false, msg: "✗ " + (d.detail || "Invalid token") };
       } catch (e) { this.tokenTest = { ok: false, msg: "✗ " + String(e) }; }
     },
-
-    // ── cloud provider handlers ──
-    async refreshProviders() {
-      try {
-        const d = await (await fetch(`${this.apiBase}/api/providers`)).json();
-        this.providers = d.providers || [];
-      } catch (e) { this.providers = []; }
-    },
-    providerMatches(p) {
-      const q = (this.providerSearch || "").trim().toLowerCase();
-      if (!q) return true;
-      const modelText = (p.models || []).map(m => `${m.label || ""} ${m.repo || ""} ${m.notes || ""}`).join(" ");
-      return [p.name, p.key, p.base_url, modelText].some(v => String(v || "").toLowerCase().includes(q));
-    },
-    visibleProviders() {
-      return (this.providers || []).filter(p => this.providerMatches(p));
-    },
-    focusProvider(name) {
-      this.focusedProvider = name;
-      setTimeout(() => {
-        const row = Array.from(document.querySelectorAll(".provider-row"))
-          .find(el => el.dataset.providerKey === name);
-        if (!row) return;
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-        const input = row.querySelector("input[type='password']");
-        if (input) setTimeout(() => input.focus({ preventScroll: true }), 360);
-      }, 30);
-    },
-    async saveProviderKey(name) {
-      const key = (this.providerKeyInputs[name] || "").trim();
-      this.providerSaving = name;
-      try {
-        const r = await fetch(`${this.apiBase}/api/providers/${name}/key`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ api_key: key }),
-        });
-        const d = await r.json();
-        if (r.ok) {
-          this.providers = d.providers || [];
-          this.providerKeyInputs[name] = "";
-          this.providerTests[name] = { ok: true, msg: "✓ Saved" };
-        } else {
-          this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || "Save failed") };
-        }
-      } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
-      this.providerSaving = null;
-      await this.refreshChatModels();
-    },
-    async testProvider(name) {
-      const key = (this.providerKeyInputs[name] || "").trim();
-      this.providerTests[name] = { ok: false, msg: "Testing…" };
-      try {
-        const r = await fetch(`${this.apiBase}/api/providers/${name}/test`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ api_key: key || null }),
-        });
-        const d = await r.json();
-        if (r.ok && d.ok) {
-          this.providerTests[name] = { ok: true, msg: `✓ Valid — ${d.models_available} models available` };
-          this.providers = (await (await fetch(`${this.apiBase}/api/providers`)).json()).providers || [];
-        } else {
-          this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || `HTTP ${d.status || "?"}`) };
-        }
-      } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
-    },
-    async loadLiveModels(name) {
-      this.liveLoading = name;
-      try {
-        const r = await fetch(`${this.apiBase}/api/providers/${name}/models/live`);
-        const d = await r.json();
-        if (r.ok) {
-          this.liveModels[name] = d.models || [];
-          this.saveLive();
-          await this.refreshChatModels();
-          this.providerTests[name] = { ok: true, msg: `✓ Loaded ${d.count} live models` };
-        } else {
-          this.providerTests[name] = { ok: false, msg: "✗ " + (d.detail || "Failed to load models") };
-        }
-      } catch (e) { this.providerTests[name] = { ok: false, msg: "✗ " + String(e) }; }
-      this.liveLoading = null;
-    },
-    clearLiveModels(name) {
-      delete this.liveModels[name];
-      this.saveLive();
-      this.refreshChatModels();
-    },
-    saveLive() { try { localStorage.setItem("chatstudio.live", JSON.stringify(this.liveModels)); } catch (e) {} },
-    loadLive() { try { const r = localStorage.getItem("chatstudio.live"); if (r) this.liveModels = JSON.parse(r) || {}; } catch (e) {} },
-    async setProviderPaid(name, enabled) {
-      try {
-        const r = await fetch(`${this.apiBase}/api/providers/${name}/paid`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ enabled }),
-        });
-        const d = await r.json();
-        if (r.ok) this.providers = d.providers || this.providers;
-      } catch (e) {}
-      // Refresh the chat dropdown so paid models appear/disappear immediately.
-      await this.refreshChatModels();
-    },
-
-    // ── fallback priority + health (Uninterrupted Mode) ──
-    async refreshRouterProviders() {
-      try {
-        const d = await (await fetch(`${this.apiBase}/api/router/providers`)).json();
-        this.routerProviders = d.providers || [];
-      } catch (e) {}
-    },
-    async refreshProviderHealth() {
-      this.healthLoading = true;
-      try {
-        const d = await (await fetch(`${this.apiBase}/api/router/health`)).json();
-        this.providerHealth = d.health || {};
-      } catch (e) {} finally { this.healthLoading = false; }
-    },
-    async moveProvider(id, dir) {
-      const ids = this.routerProviders.map(p => p.id);
-      const i = ids.indexOf(id), j = i + dir;
-      if (i < 0 || j < 0 || j >= ids.length) return;
-      [ids[i], ids[j]] = [ids[j], ids[i]];
-      try {
-        const d = await (await fetch(`${this.apiBase}/api/router/order`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ order: ids }),
-        })).json();
-        this.routerProviders = d.providers || this.routerProviders;
-      } catch (e) {}
-    },
-    async toggleProviderEnabled(id, enabled) {
-      try {
-        const d = await (await fetch(`${this.apiBase}/api/router/providers/${id}/enabled`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ enabled }),
-        })).json();
-        this.routerProviders = d.providers || this.routerProviders;
-      } catch (e) {}
-    },
-
     // generation settings persistence
     loadGen() {
       try {

@@ -38,7 +38,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import cache, catalog, settings as app_settings, llm_engine, hub, memory_policy, providers, restart_health, router, sessions, storage_policy
+from . import cache, catalog, settings as app_settings, llm_engine, hub, memory_policy, restart_health, sessions, storage_policy
 from .downloads import manager
 from .fleet_auth import load_token as load_fleet_token, make_middleware as fleet_middleware, manifest
 from .auto_update import UpdateError
@@ -139,8 +139,6 @@ class StartDownloadBody(BaseModel):
 
 class SettingsBody(BaseModel):
     hf_token: Optional[str] = None
-    uninterrupted_mode: Optional[bool] = None
-    request_timeout: Optional[int] = Field(None, ge=5, le=300)
 
 
 class AutoUpdateSettingsBody(BaseModel):
@@ -162,14 +160,6 @@ class TokenTestBody(BaseModel):
     hf_token: Optional[str] = None
 
 
-class ProviderKeyBody(BaseModel):
-    api_key: Optional[str] = Field(None, max_length=16384)
-
-
-class ProviderPaidBody(BaseModel):
-    enabled: bool = False
-
-
 class SessionBody(BaseModel):
     id: Optional[str] = Field(None, max_length=100)
     title: Optional[str] = Field(None, max_length=200)
@@ -184,14 +174,6 @@ class PinBody(BaseModel):
 
 class RenameBody(BaseModel):
     title: str = Field("", max_length=200)
-
-
-class ProviderEnabledBody(BaseModel):
-    enabled: bool = True
-
-
-class ProviderOrderBody(BaseModel):
-    order: list[str]
 
 
 class LoadModelBody(BaseModel):
@@ -210,7 +192,6 @@ class ChatCompletionsBody(BaseModel):
     max_tokens: int = Field(1024, ge=1, le=32768)
     top_p: float = Field(1.0, gt=0.0, le=1.0)
     stream: bool = True
-    exclude_providers: list[str] = Field(default_factory=list, max_length=32)
     images: list[str] = Field(default_factory=list, max_length=4)
 
     @field_validator("images")
@@ -546,10 +527,6 @@ def get_settings() -> dict:
 def update_settings(body: SettingsBody) -> dict:
     if body.hf_token is not None:
         app_settings.set_hf_token(body.hf_token)
-    if body.uninterrupted_mode is not None:
-        app_settings.set_uninterrupted(body.uninterrupted_mode)
-    if body.request_timeout is not None:
-        app_settings.set_request_timeout(body.request_timeout)
     return app_settings.serialize_public()
 
 
@@ -611,79 +588,6 @@ def test_hf_token(body: TokenTestBody) -> dict:
         raise HTTPException(status_code=400, detail=f"Token validation failed: {e}")
 
 
-# ───────────── API: cloud providers ─────────────
-
-@app.get("/api/providers")
-def list_providers() -> dict:
-    """List configured cloud providers + their free models. Never exposes raw
-    API keys — only a masked preview + key_set boolean."""
-    return {"providers": providers.public_view()}
-
-
-@app.post("/api/providers/{name}/key")
-def set_provider_key(name: str, body: ProviderKeyBody) -> dict:
-    if name not in providers.PROVIDERS:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
-    app_settings.set_provider_key(name, body.api_key)
-    return {"ok": True, "providers": providers.public_view()}
-
-
-@app.get("/api/providers/{name}/models/live")
-async def provider_live_models(name: str) -> dict:
-    """Fetch the provider's current model catalog live from its /models
-    endpoint — so the dropdown can show what's actually available now instead
-    of the curated (drift-prone) list."""
-    if name not in providers.PROVIDERS:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
-    try:
-        models = await providers.list_live_models(providers.PROVIDERS[name])
-    except RuntimeError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Live model fetch failed: {e}")
-    return {"provider": name, "count": len(models), "models": models}
-
-
-# ───────────── API: router (Uninterrupted Mode priority + health) ─────────────
-
-@app.get("/api/router/providers")
-def router_providers() -> dict:
-    """Routable providers (local + cloud) in priority order, with enabled/key
-    state — drives the fallback-order + health UI."""
-    return {
-        "providers": router.ordered_provider_list(),
-        "uninterrupted_mode": app_settings.get_uninterrupted(),
-        "request_timeout": app_settings.get_request_timeout(),
-    }
-
-
-@app.get("/api/router/health")
-async def router_health() -> dict:
-    return {"health": await router.health_check_all()}
-
-
-@app.post("/api/router/order")
-def router_set_order(body: ProviderOrderBody) -> dict:
-    app_settings.set_provider_priority(body.order)
-    return {"ok": True, "providers": router.ordered_provider_list()}
-
-
-@app.post("/api/router/providers/{pid}/enabled")
-def router_set_enabled(pid: str, body: ProviderEnabledBody) -> dict:
-    app_settings.set_provider_enabled(pid, body.enabled)
-    return {"ok": True, "providers": router.ordered_provider_list()}
-
-
-@app.post("/api/providers/{name}/paid")
-def set_provider_paid(name: str, body: ProviderPaidBody) -> dict:
-    """Opt in/out of a provider's paid models. When off, paid models are hidden
-    from the UI and rejected by the chat route."""
-    if name not in providers.PROVIDERS:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
-    app_settings.set_provider_paid(name, body.enabled)
-    return {"ok": True, "providers": providers.public_view()}
-
-
 # ───────────── API: chat sessions (history) ─────────────
 
 @app.get("/api/sessions")
@@ -722,30 +626,6 @@ def rename_session(sid: str, body: RenameBody) -> dict:
     if not sessions.rename(sid, body.title):
         raise HTTPException(status_code=404, detail="session not found")
     return {"ok": True}
-
-
-@app.post("/api/providers/{name}/test")
-async def test_provider_key(name: str, body: ProviderKeyBody) -> dict:
-    if name not in providers.PROVIDERS:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {name}")
-    p = providers.PROVIDERS[name]
-    token = (body.api_key or "").strip() or providers.get_api_key(name)
-    if not token:
-        raise HTTPException(status_code=400, detail=f"No {p.name} API key provided.")
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(
-                f"{p.base_url}/models",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-        if r.status_code == 200:
-            data = r.json()
-            model_count = len(data.get("data", [])) if isinstance(data, dict) else 0
-            return {"ok": True, "models_available": model_count}
-        return {"ok": False, "status": r.status_code, "detail": r.text[:300]}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Test failed: {e}")
 
 
 # ───────────── API: connectivity ─────────────
@@ -902,87 +782,11 @@ async def _prune_stale_partials():
 async def chat_completions(body: ChatCompletionsBody):
     messages = [m.model_dump() for m in body.messages]
 
-    # ── Uninterrupted Mode: route through the auto-fallback router ──
-    if app_settings.get_uninterrupted():
-        params = {"temperature": body.temperature, "max_tokens": body.max_tokens, "top_p": body.top_p}
-        timeout = app_settings.get_request_timeout()
-        exclude = body.exclude_providers or []
-        if body.stream:
-            async def uninterrupted_stream():
-                meta = None
-                async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout, exclude_ids=exclude):
-                    t = ev.get("type")
-                    if t == "chunk":
-                        yield ev["text"]
-                    elif t == "done":
-                        meta = {"provider": ev["provider"], "model": ev["model"], "fallback": ev["fallback"]}
-                    elif t == "interrupted":
-                        # Stream broke AFTER text — keep the partial; the UI shows
-                        # a "Continue with fallback" button (no inline noise).
-                        meta = {"interrupted": True, "provider": ev["provider"], "provider_id": ev.get("provider_id")}
-                    elif t == "error":
-                        yield f"\n[error] {ev.get('detail', 'generation failed')}"
-                # Trailing metadata sentinel — the UI strips this and shows which
-                # provider answered / whether it fell back / was interrupted.
-                if meta is not None:
-                    yield "\n__CHATSTUDIO_META__" + json.dumps(meta)
-            return StreamingResponse(uninterrupted_stream(), media_type="text/plain")
-        # non-streaming
-        text, meta = "", None
-        async for ev in router.generate(messages, body.repo, params, uninterrupted=True, timeout=timeout, exclude_ids=exclude):
-            t = ev.get("type")
-            if t == "chunk":
-                text += ev["text"]
-            elif t == "done":
-                meta = {"provider": ev["provider"], "model": ev["model"], "fallback": ev["fallback"]}
-            elif t in ("error", "interrupted"):
-                raise HTTPException(status_code=502, detail=ev.get("detail", "generation failed"))
-        return {"repo": body.repo, "content": text, "meta": meta}
-
-    # Cloud provider routing — synthetic repo id `provider:<key>:<model_id>`.
     if body.repo.startswith("provider:"):
-        parsed = providers.parse_repo(body.repo)
-        if not parsed:
-            raise HTTPException(status_code=400, detail=f"Unknown provider repo: {body.repo}")
-        provider, model = parsed
-        # Gate paid models: refuse unless the user enabled paid for this
-        # provider, so a paid model can't be used (and billed) by accident.
-        if not providers.model_allowed(provider, model):
-            raise HTTPException(
-                status_code=403,
-                detail=(f"{model.id} is a paid {provider.name} model. "
-                        f"Enable paid models for {provider.name} in Settings → Cloud providers first."),
-            )
-        if body.stream:
-            async def event_stream():
-                try:
-                    async for chunk in providers.stream_chat(
-                        provider, model, messages,
-                        body.temperature, body.max_tokens, body.top_p,
-                    ):
-                        yield chunk
-                except Exception as e:
-                    import traceback
-                    print(f"[chat studio] cloud stream error:\n{traceback.format_exc()}",
-                          file=sys.stderr, flush=True)
-                    yield f"\n[error] {type(e).__name__}: {e}\n"
-            return StreamingResponse(event_stream(), media_type="text/plain")
-        # Non-streaming: collect chunks
-        try:
-            chunks = []
-            async for c in providers.stream_chat(
-                provider, model, messages,
-                body.temperature, body.max_tokens, body.top_p,
-            ):
-                chunks.append(c)
-            return {"repo": body.repo, "content": "".join(chunks)}
-        except Exception as e:
-            # str(e) alone is EMPTY for httpx timeouts — always include the
-            # exception type so the client never sees a bodyless 502, and
-            # log it (with the model) so the failure is visible server-side.
-            detail = f"{provider.name} · {model.id}: {type(e).__name__}: {e}".rstrip(": ")
-            print(f"[chat studio] cloud error (api): {detail}", file=sys.stderr, flush=True)
-            raise HTTPException(status_code=502, detail=detail)
+        raise HTTPException(
+            status_code=400,
+            detail="Cloud providers are no longer supported; choose a downloaded local model.",
+        )
 
     # Auto-load the requested local model if it's cached but not loaded
     # (off the event loop so a multi-GB load doesn't stall other requests).
@@ -1037,34 +841,6 @@ async def openai_models() -> dict:
             data.append({"id": repo, "object": "model", "owned_by": repo.split("/")[0]})
             seen.add(repo)
 
-    # Cloud providers: include any provider whose API key is configured
-    # (env var or settings.json — `get_api_key` handles the precedence,
-    # including HF Router's fallback to the saved HF token). Providers
-    # without a key are silently excluded — no key, no models.
-    keyed_providers = [
-        p for p in providers.PROVIDERS.values() if providers.get_api_key(p.key)
-    ]
-    if keyed_providers:
-        # Fan out concurrently so the slowest provider doesn't dominate
-        # wall-clock. `return_exceptions=True` ensures one provider's
-        # failure (network, auth, upstream 5xx) never breaks /v1/models —
-        # we just skip that provider for this call. `models_for_provider`
-        # already swallows its own exceptions and falls back to the static
-        # catalog, so the outer return_exceptions is belt-and-braces.
-        results = await asyncio.gather(
-            *(providers.models_for_provider(p) for p in keyed_providers),
-            return_exceptions=True,
-        )
-        for provider, result in zip(keyed_providers, results):
-            if isinstance(result, BaseException):
-                continue
-            for m in result:
-                repo = m["repo"]
-                if repo in seen:
-                    continue
-                data.append({"id": repo, "object": "model", "owned_by": provider.key})
-                seen.add(repo)
-
     return {"object": "list", "data": data}
 
 
@@ -1074,100 +850,11 @@ async def openai_chat_completions(body: OpenAIChatCompletionsBody):
     created = int(time.time())
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
 
-    # ── Cloud provider routing: synthetic id "provider:<key>:<model_id>" ──
-    # Mirrors /api/chat/completions' cloud fork so /v1/chat/completions is a
-    # drop-in for clients picking cloud models from /v1/models. Without this
-    # fork, ensure_loaded() below would raise a 409 for any cloud model id.
     if body.model.startswith("provider:"):
-        parsed = providers.parse_repo(body.model)
-        if not parsed:
-            raise HTTPException(status_code=400, detail=f"Unknown provider model: {body.model}")
-        provider, model = parsed
-        # No key → can't reach upstream. Surface a clean 401 instead of letting
-        # providers.stream_chat raise a generic RuntimeError mid-stream.
-        if not providers.get_api_key(provider.key):
-            raise HTTPException(
-                status_code=401,
-                detail=f"{provider.name} API key not set. Add it in Settings → Cloud providers.",
-            )
-        # Paid models are gated behind the per-provider opt-in so a paid model
-        # can't be used (and billed) without the user explicitly enabling it.
-        if not providers.model_allowed(provider, model):
-            raise HTTPException(
-                status_code=403,
-                detail=(f"{model.id} is a paid {provider.name} model. "
-                        f"Enable paid models for {provider.name} in Settings → Cloud providers first."),
-            )
-        if body.stream:
-            async def cloud_event_stream():
-                try:
-                    async for chunk in providers.stream_chat(
-                        provider, model, messages,
-                        body.temperature, body.max_tokens, body.top_p,
-                    ):
-                        event = {
-                            "id": completion_id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": body.model,
-                            "choices": [{
-                                "index": 0,
-                                "delta": {"content": chunk},
-                                "finish_reason": None,
-                            }],
-                        }
-                        yield f"data: {json.dumps(event)}\n\n"
-                except Exception as e:
-                    # Match the local-path error envelope so OpenAI clients
-                    # parse cloud and local failures the same way.
-                    event = {
-                        "id": completion_id,
-                        "object": "chat.completion.chunk",
-                        "created": created,
-                        "model": body.model,
-                        "choices": [{
-                            "index": 0,
-                            "delta": {},
-                            "finish_reason": "error",
-                        }],
-                        "error": str(e),
-                    }
-                    yield f"data: {json.dumps(event)}\n\n"
-                yield "data: [DONE]\n\n"
-            return StreamingResponse(cloud_event_stream(), media_type="text/event-stream")
-        # Non-streaming: collect chunks and return a single chat.completion.
-        try:
-            chunks: list[str] = []
-            async for c in providers.stream_chat(
-                provider, model, messages,
-                body.temperature, body.max_tokens, body.top_p,
-            ):
-                chunks.append(c)
-            text = "".join(chunks)
-        except Exception as e:
-            # str(e) alone is EMPTY for httpx timeouts (this is exactly the
-            # "502 (No body)" clients used to see when NVIDIA hung on a big
-            # model) — always include the exception type, and log server-side
-            # with the model id so /v1 failures show up in the service log.
-            detail = f"{provider.name} · {model.id}: {type(e).__name__}: {e}".rstrip(": ")
-            print(f"[chat studio] cloud error (v1): {detail}", file=sys.stderr, flush=True)
-            raise HTTPException(status_code=502, detail=detail)
-        return {
-            "id": completion_id,
-            "object": "chat.completion",
-            "created": created,
-            "model": body.model,
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": text},
-                "finish_reason": "stop",
-            }],
-            "usage": {
-                "prompt_tokens": None,
-                "completion_tokens": None,
-                "total_tokens": None,
-            },
-        }
+        raise HTTPException(
+            status_code=400,
+            detail="Cloud providers are no longer supported; choose a downloaded local model.",
+        )
 
     # Drop-in OpenAI behavior: load the requested model on demand if needed, so
     # clients (e.g. Story Studio) just specify `model` without a separate load.

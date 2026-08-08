@@ -140,15 +140,9 @@
         <div class="chat-head">
           <button class="ghost small sidebar-toggle" @click="showSidebar=!showSidebar" title="Toggle history">☰</button>
           <div class="model-select">
-            <div class="seg modeltabs">
-              <button type="button" :class="{active: effectiveModelTab()==='local'}" @click="setModelTab('local')">🖥 Local</button>
-              <button type="button" :class="{active: effectiveModelTab()==='cloud'}" @click="setModelTab('cloud')">☁ Free</button>
-              <button type="button" :class="{active: effectiveModelTab()==='paid'}" @click="setModelTab('paid')">💳 Paid</button>
-            </div>
             <select x-model="selectedRepo" @change="onPickModel()">
               <template x-if="groupedModels().length === 0">
-                <option value="" disabled selected
-                        x-text="effectiveModelTab()==='cloud' ? 'No cloud models — add an API key in Settings' : 'No local models — download one'"></option>
+                <option value="" disabled selected>No local models — download one</option>
               </template>
               <template x-for="g in groupedModels()" :key="g.label">
                 <optgroup :label="g.label">
@@ -158,14 +152,11 @@
                 </optgroup>
               </template>
             </select>
-            <label class="showall-toggle" x-show="effectiveModelTab()==='cloud'" x-cloak title="Also show providers you haven't added a key for (greyed out)">
-              <input type="checkbox" x-model="showAllProviders"> show all
-            </label>
             <span class="load-state" :class="loadingModel ? 'loading' : (currentRepo===selectedRepo ? 'ok':'')">
               <span x-show="loadingModel" x-cloak>● loading…</span>
               <span x-show="!loadingModel && currentRepo===selectedRepo" x-cloak>● ready</span>
             </span>
-            <button class="primary small" x-show="selectedRepo && currentRepo!==selectedRepo && !loadingModel && !selectedRepo.startsWith('provider:')" x-cloak @click="loadModel(selectedRepo)">Load</button>
+            <button class="primary small" x-show="selectedRepo && currentRepo!==selectedRepo && !loadingModel" x-cloak @click="loadModel(selectedRepo)">Load</button>
           </div>
           <div class="spacer"></div>
           <span class="mem-pill" x-show="health.loaded_model" x-cloak :title="'Local model in memory: ' + health.loaded_model">● <span x-text="sessionModelShort(health.loaded_model)"></span> loaded</span>
@@ -228,15 +219,6 @@
           </div>
         </div>
 
-        <!-- continue-with-fallback (mid-stream interruption) -->
-        <div class="continue-banner" x-show="continueState && !continuing && !streaming" x-cloak>
-          <span>⚠ Reply was interrupted on <strong x-text="continueState && continueState.provider"></strong>.</span>
-          <span class="spacer" style="flex:1"></span>
-          <button class="primary small" @click="continueGeneration()">Continue with fallback →</button>
-          <button class="ghost small" @click="continueState=null">Dismiss</button>
-        </div>
-        <div class="continue-banner" x-show="continuing" x-cloak><span>Continuing with a fallback provider…</span></div>
-
         <!-- composer -->
         <div class="composer">
           <!-- attached-image preview strip (vision models only) -->
@@ -287,23 +269,16 @@
           <h1>Choose a family. Then choose your fit.</h1>
           <p>Browse model lineages first, then compare their sizes, quantization, memory needs, and specialties without losing your place.</p>
         </div>
-        <div class="model-scope-tabs" aria-label="Model source">
-          <button class="model-scope-tab" :class="{active:modelScope==='local'}" @click="setModelScope('local')">
-            <span>Local MLX</span><strong x-text="localModelCount()"></strong>
-          </button>
-          <button class="model-scope-tab" :class="{active:modelScope==='cloud'}" @click="setModelScope('cloud')">
-            <span>Cloud</span><strong x-text="cloudModelCount()"></strong>
-          </button>
-        </div>
+        <div class="your-mac-banner"><span class="your-mac-icon">🖥</span><strong>Local MLX</strong><span x-text="localModelCount() + ' models'"></span></div>
       </section>
 
       <section class="model-commandbar">
         <input class="model-search" type="search" placeholder="Search families, models, or repositories…" x-model="modelSearch">
         <div class="model-command-actions">
-          <button class="ghost" x-show="modelScope==='local'" :class="{active:fitFilter==='ok'}" @click="fitFilter=fitFilter==='ok'?'all':'ok'">Fits comfortably</button>
+          <button class="ghost" :class="{active:fitFilter==='ok'}" @click="fitFilter=fitFilter==='ok'?'all':'ok'">Fits comfortably</button>
           <button class="ghost" :class="{active:modelAdvancedOpen}" @click="modelAdvancedOpen=!modelAdvancedOpen">Filters</button>
         </div>
-        <div class="model-quick-filters" x-show="modelScope==='local'">
+        <div class="model-quick-filters">
           <button class="model-quick-chip" :class="{active:capFilter==='all'}" @click="capFilter='all'">All roles</button>
           <button class="model-quick-chip" :class="{active:capFilter==='starter'}" @click="capFilter='starter'">Starter</button>
           <button class="model-quick-chip" :class="{active:capFilter==='coder'}" @click="capFilter='coder'">Code</button>
@@ -314,7 +289,7 @@
 
       <section class="model-advanced" x-show="modelAdvancedOpen" x-cloak>
         <div class="advanced-grid">
-          <div class="advanced-block" x-show="modelScope==='local'">
+          <div class="advanced-block">
             <div class="advanced-label">Memory fit at <span x-text="ramGb"></span> GB</div>
             <div class="seg fit-seg">
               <button :class="{active:fitFilter==='all'}" @click="fitFilter='all'">All</button>
@@ -323,34 +298,28 @@
               <button :class="{active:fitFilter==='over'}" @click="fitFilter='over'">Over</button>
             </div>
           </div>
-          <div class="advanced-block" x-show="modelScope==='local'">
+          <div class="advanced-block">
             <div class="advanced-label">Plan for another Mac</div>
             <div class="compact-device-line"><strong x-text="system.chip || 'Apple Silicon'"></strong> · <span x-text="ramGb"></span> GB</div>
             <div class="ram-tiers compact-ram-tiers">
               <template x-for="t in ramTiers" :key="t"><button class="chip ram-tier" :class="{active:ramGb===t}" @click="setRam(t)" x-text="t+' GB'"></button></template>
             </div>
           </div>
-          <div class="advanced-block" x-show="modelScope==='local'">
+          <div class="advanced-block">
             <div class="advanced-label">Order variants</div>
             <select class="model-sort library-sort" x-model="sortBy">
               <option value="default">Curated order</option><option value="size">Smallest download</option><option value="ram">Least RAM</option><option value="name">Name A–Z</option>
             </select>
           </div>
-          <div class="advanced-block" x-show="modelScope==='cloud'">
-            <div class="advanced-label">Cloud availability</div>
-            <p class="muted small">Providers with saved credentials are marked Ready. Add or manage keys in Settings. Paid models only appear after you opt in there.</p>
-            <button class="ghost small" @click="go('settings')">Manage provider keys</button>
-          </div>
         </div>
       </section>
 
       <div class="family-library-heading">
-        <div><h2 x-text="modelScope==='local' ? 'Chat model families' : 'Cloud providers'"></h2><p class="muted" x-text="visibleScopeModelCount()+' options across '+visibleScopeFamilyCount()+(modelScope==='local'?' families':' providers')"></p></div>
-        <p class="muted" x-show="modelScope==='local'">MLX-quantized weights run privately on Apple Silicon.</p>
-        <p class="muted" x-show="modelScope==='cloud'">Hosted models use provider APIs and do not consume local RAM.</p>
+        <div><h2>Chat model families</h2><p class="muted" x-text="visibleModelCount()+' options across '+visibleFamilyCount()+' families'"></p></div>
+        <p class="muted">MLX-quantized weights run privately on Apple Silicon.</p>
       </div>
 
-      <div class="family-stack" x-show="modelScope==='local'">
+      <div class="family-stack">
         <template x-for="family in filteredFamilies()" :key="family.id">
           <section class="family-panel" :class="{'is-open':isModelFamilyOpen(family.id)}">
             <button class="family-panel-trigger" @click="toggleModelFamily(family.id)">
@@ -393,26 +362,9 @@
         </template>
       </div>
 
-      <div class="family-stack" x-show="modelScope==='cloud'" x-cloak>
-        <template x-for="p in visibleCloudProviders()" :key="p.key">
-          <section class="family-panel tone-cloud" :class="{'is-open':isModelFamilyOpen('cloud:'+p.key)}">
-            <button class="family-panel-trigger" @click="toggleModelFamily('cloud:'+p.key)">
-              <span class="family-monogram" x-text="familyMonogram(p.name)"></span>
-              <span class="family-panel-copy"><span class="family-title-line"><strong x-text="p.name"></strong><span class="family-cached" x-text="p.key_set?'Ready':'Key needed'"></span></span><span class="family-summary" x-text="p.key_set?'Connected and ready to chat.':'Add a provider key in Settings before chatting.'"></span><span class="family-facts"><span x-text="cloudModelsFor(p).length+' models'"></span><span x-text="p.has_paid&&p.paid_enabled?'Free + paid':'Free catalog'"></span><span>No local download</span></span></span>
-              <span class="family-chevron" x-text="isModelFamilyOpen('cloud:'+p.key)?'−':'+'"></span>
-            </button>
-            <div class="family-panel-body" x-show="isModelFamilyOpen('cloud:'+p.key)" x-cloak>
-              <div class="family-guidance"><span>Provider</span><p>Models run remotely through <span x-text="p.name"></span>. Your prompts are sent to that provider under its terms and limits.</p></div>
-              <div class="variant-table-head is-cloud"><span>Hosted model</span><span>Best for</span><span>Access</span><span></span></div>
-              <div class="variant-list"><template x-for="m in cloudModelsFor(p)" :key="m.repo"><article class="variant-row cloud-row"><div class="variant-identity"><div class="variant-title-line"><h3 x-text="m.label"></h3><span class="variant-role" x-text="m.free?'Free':'Paid'"></span></div><div class="variant-capabilities"><span x-text="m.live?'Live catalog':'Curated'"></span><span>Cloud API</span></div></div><div class="variant-spec" data-label="Best for"><strong x-text="m.notes||'General chat'"></strong><small x-text="m.id"></small></div><div class="variant-spec" data-label="Access"><strong x-text="p.key_set?'Ready':'Key needed'"></strong><small>No local files</small></div><div class="variant-action"><button class="primary small" @click="useCloudModel(m,p)" x-text="p.key_set?'Chat':'Add key'"></button></div></article></template></div>
-            </div>
-          </section>
-        </template>
-      </div>
+      <section class="library-empty" x-show="visibleModelCount()===0"><div class="empty-orbit">○</div><h3>No models match these filters</h3><p class="muted">Clear the search and filters to bring every family back.</p><button class="ghost" @click="clearModelFilters()">Clear filters</button></section>
 
-      <section class="library-empty" x-show="visibleScopeModelCount()===0"><div class="empty-orbit">○</div><h3>No models match these filters</h3><p class="muted">Clear the search and filters to bring every family back.</p><button class="ghost" @click="clearModelFilters()">Clear filters</button></section>
-
-      <details class="hub-discovery" x-show="modelScope==='local'">
+      <details class="hub-discovery">
         <summary><span>Discover more on Hugging Face</span><small>Advanced · MLX-compatible repositories beyond the curated catalog</small></summary>
         <div class="hub-discovery-body">
           <div class="hub-search-row"><input class="model-search" type="search" placeholder="Search Hugging Face MLX models…" x-model="hubQuery" @keydown.enter="searchHub()"><button class="primary" @click="searchHub()" :disabled="hubLoading" x-text="hubLoading?'Searching…':'Search Hub'"></button></div>
@@ -551,17 +503,9 @@
       <div class="page-head settings-head">
         <div>
           <h1>Settings</h1>
-          <p class="muted">Configure fallback behavior, model defaults, tokens, providers, and service health.</p>
+          <p class="muted">Configure local model memory, generation defaults, downloads, and service health.</p>
         </div>
         <div class="settings-summary" aria-label="Settings status">
-          <span class="summary-pill" :class="settings.uninterrupted_mode ? 'ok' : ''">
-            <strong x-text="settings.uninterrupted_mode ? 'Fallback on' : 'Fallback off'"></strong>
-            <small x-text="(settings.request_timeout || 60) + 's timeout'"></small>
-          </span>
-          <span class="summary-pill" :class="providers.filter(p => p.key_set).length ? 'ok' : ''">
-            <strong x-text="providers.filter(p => p.key_set).length + ' providers'"></strong>
-            <small>with keys</small>
-          </span>
           <span class="summary-pill" :class="diag.available ? 'ok' : 'warn'">
             <strong x-text="diag.available ? 'MLX ready' : 'MLX check'"></strong>
             <small x-text="diag.loaded_model ? 'model loaded' : 'idle'"></small>
@@ -624,27 +568,8 @@
 
       <div class="settings-section-title">
         <span>Chat Behavior</span>
-        <small>Routing, defaults, and generation controls</small>
+        <small>Local defaults and generation controls</small>
       </div>
-
-      <!-- uninterrupted mode -->
-      <div class="settings-grid">
-      <section class="card settings-card">
-        <h3>Uninterrupted Mode</h3>
-        <p class="card-sub">Keep chatting even if a provider fails. When on, if your selected model errors (offline, rate-limited, overloaded, timed out, or no key), Chat Studio automatically retries the next provider in priority order — local MLX + your configured cloud providers.</p>
-        <label class="card-row" style="gap:8px; cursor:pointer; align-items:center;">
-          <input type="checkbox" x-model="settings.uninterrupted_mode" @change="saveUninterrupted()">
-          <span><strong>Enable auto-fallback</strong>
-            <span class="muted small" x-text="settings.uninterrupted_mode ? '— on' : '— off (use only the selected model)'"></span>
-          </span>
-        </label>
-        <div class="field" style="margin-top:12px; max-width:260px;">
-          <label>Request timeout <span class="val" x-text="(settings.request_timeout || 60) + 's'"></span></label>
-          <input type="range" min="10" max="180" step="5" x-model.number="settings.request_timeout" @change="saveUninterrupted()">
-          <p class="hint">If a provider sends no token within this time, fall back to the next one.</p>
-        </div>
-        <p class="hint">Answers show <em>via &lt;provider&gt;</em> (and “fell back” when a backup was used).</p>
-      </section>
 
       <!-- default model -->
       <section class="card settings-card">
@@ -665,7 +590,6 @@
         </p>
         <p class="hint" x-show="!gen.defaultModel">No default — the Chat tab will start with the first model in the list.</p>
       </section>
-      </div>
 
       <!-- generation defaults -->
       <section class="card">
@@ -693,36 +617,9 @@
         <button class="ghost small" @click="resetGen()">Reset to defaults</button>
       </section>
 
-      <!-- fallback providers + health -->
-      <section class="card">
-        <div class="card-row" style="margin-bottom:4px;">
-          <h3 style="margin:0;">Fallback order &amp; health</h3>
-          <span class="spacer" style="flex:1"></span>
-          <button class="ghost small" @click="refreshProviderHealth()" :disabled="healthLoading">
-            <span x-show="!healthLoading">↻ Re-check</span>
-            <span x-show="healthLoading" x-cloak>Checking…</span>
-          </button>
-        </div>
-        <p class="card-sub">The order Uninterrupted Mode tries providers (top = first). Turn one off to skip it. Health is checked on launch and every 5 minutes.</p>
-        <template x-for="(p, i) in routerProviders" :key="p.id">
-          <div class="router-row">
-            <span class="health-dot" :class="'h-' + (providerHealth[p.id] || 'unknown')" :title="providerHealth[p.id] || 'unknown'"></span>
-            <span class="router-name" x-text="p.name"></span>
-            <span class="chip" x-text="p.kind"></span>
-            <span class="muted small" x-text="providerHealth[p.id] || '…'"></span>
-            <span class="spacer" style="flex:1"></span>
-            <button class="ghost small" :disabled="i===0" @click="moveProvider(p.id,-1)" title="Higher priority">↑</button>
-            <button class="ghost small" :disabled="i===routerProviders.length-1" @click="moveProvider(p.id,1)" title="Lower priority">↓</button>
-            <label class="showall-toggle">
-              <input type="checkbox" :checked="p.enabled" @change="toggleProviderEnabled(p.id, $event.target.checked)"> on
-            </label>
-          </div>
-        </template>
-      </section>
-
       <div class="settings-section-title">
         <span>Access</span>
-        <small>Download token and hosted model providers</small>
+        <small>Optional Hugging Face download credential</small>
       </div>
 
       <!-- HF token -->
@@ -737,101 +634,6 @@
         </div>
         <p class="hint" x-show="settings.hf_token_set" x-cloak x-text="'Saved token: ' + settings.hf_token_masked"></p>
         <p class="test-result" :class="tokenTest.ok ? 'ok':'err'" x-show="tokenTest.msg" x-cloak x-text="tokenTest.msg"></p>
-      </section>
-
-      <!-- cloud providers -->
-      <section class="card" x-show="providers.length > 0" x-cloak>
-        <h3>Cloud providers</h3>
-        <p class="card-sub">Route chat to hosted models. Free models show by default; flip <strong>Enable paid models</strong> to also use a provider's paid flagships (💲). Pick a cloud model from the Chat tab's dropdown (☁). Keys are stored locally in <code>settings.json</code> and never logged.</p>
-        <div class="provider-toolbar">
-          <span class="chip ok" x-show="providers.filter(p => p.key_set).length" x-cloak x-text="providers.filter(p => p.key_set).length + ' connected'"></span>
-          <span class="chip warn" x-show="providers.filter(p => !p.key_set).length" x-cloak x-text="providers.filter(p => !p.key_set).length + ' need keys'"></span>
-          <span class="muted small" x-text="providers.reduce((n,p)=>n+p.models.length,0) + ' curated models'"></span>
-        </div>
-        <div class="provider-controlbar">
-          <input class="provider-search" type="search" x-model="providerSearch"
-                 placeholder="Find provider or model" autocomplete="off" />
-          <button class="ghost small" x-show="providerSearch" x-cloak @click="providerSearch = ''">Clear</button>
-          <span class="muted small" x-text="visibleProviders().length + ' shown'"></span>
-        </div>
-        <div class="provider-picker-grid">
-          <template x-for="p in visibleProviders()" :key="'provider-card-' + p.key">
-            <button type="button" class="provider-pick-card"
-                    :class="{ active: focusedProvider === p.key, connected: p.key_set }"
-                    @click="focusProvider(p.key)">
-              <span class="provider-pick-top">
-                <strong x-text="p.name"></strong>
-                <span class="provider-pick-state" :class="p.key_set ? 'ok' : 'warn'"
-                      x-text="p.key_set ? 'Ready' : 'Key needed'"></span>
-              </span>
-              <span class="provider-pick-meta">
-                <span x-text="p.models.length + ' models'"></span>
-                <span x-show="p.has_paid" x-cloak>Paid opt-in</span>
-              </span>
-            </button>
-          </template>
-        </div>
-        <p class="hint" x-show="visibleProviders().length === 0" x-cloak>No providers match this search.</p>
-        <template x-for="p in visibleProviders()" :key="p.key">
-          <div class="provider-row" :class="{ focus: focusedProvider === p.key }" :data-provider-key="p.key">
-            <div class="provider-row-head">
-              <div>
-                <strong x-text="p.name"></strong>
-                <p class="muted small" x-text="p.models.length + ' curated models' + (p.has_paid ? ' · paid catalog available' : '')"></p>
-              </div>
-              <span class="spacer" style="flex:1"></span>
-              <span class="chip ok" x-show="p.key_set" x-cloak>saved: <span x-text="p.key_masked"></span></span>
-              <span class="chip warn" x-show="!p.key_set" x-cloak>no key</span>
-            </div>
-            <div class="provider-key-row">
-              <input type="password" style="flex:1; min-width:220px;"
-                     :value="providerKeyInputs[p.key] || ''"
-                     @input="providerKeyInputs[p.key] = $event.target.value"
-                     placeholder="Paste API key" autocomplete="off" />
-              <button class="primary" @click="saveProviderKey(p.key)" :disabled="providerSaving === p.key">
-                <span x-show="providerSaving !== p.key">Save</span>
-                <span x-show="providerSaving === p.key" x-cloak>…</span>
-              </button>
-              <button class="ghost" @click="testProvider(p.key)">Test</button>
-              <a class="provider-doc-link" :href="p.docs_url" target="_blank" rel="noopener">Get key ↗</a>
-            </div>
-            <p class="test-result" :class="(providerTests[p.key] || {}).ok ? 'ok' : 'err'"
-               x-show="(providerTests[p.key] || {}).msg" x-cloak
-               x-text="(providerTests[p.key] || {}).msg"></p>
-            <p class="hint" x-show="p.reuse_hf_token && !p.key_set" x-cloak style="margin:6px 0 0;">Leave blank to use your saved Hugging Face token.</p>
-            <label class="card-row" x-show="p.has_paid" x-cloak
-                   style="gap:8px; margin-top:8px; cursor:pointer; font-size:13px; align-items:center;">
-              <input type="checkbox" :checked="p.paid_enabled"
-                     @change="setProviderPaid(p.key, $event.target.checked)">
-              <span>Enable paid models
-                <span class="muted small">— uses your paid <span x-text="p.name"></span> credits</span>
-              </span>
-            </label>
-            <div class="provider-actions">
-              <button class="ghost small" @click="loadLiveModels(p.key)" :disabled="liveLoading===p.key">
-                <span x-show="liveLoading!==p.key">↻ Load all models (live)</span>
-                <span x-show="liveLoading===p.key" x-cloak>Loading…</span>
-              </button>
-              <span class="muted small" x-show="(liveModels[p.key]||[]).length" x-cloak
-                    x-text="(liveModels[p.key]||[]).length + ' live in dropdown'"></span>
-              <button class="link small danger" x-show="(liveModels[p.key]||[]).length" x-cloak
-                      @click="clearLiveModels(p.key)">clear</button>
-            </div>
-            <p class="hint" style="margin:4px 0 0;">Fetches this provider's current model list. <span x-show="p.has_paid" x-cloak>May include paid models — usage is billed by the provider.</span></p>
-            <details style="margin-top:8px;">
-              <summary class="muted small" style="cursor:pointer;">Show curated models</summary>
-              <ul style="margin:6px 0 0 18px; font-size:12.5px; color:var(--muted);">
-                <template x-for="m in p.models" :key="m.repo">
-                  <li x-show="m.free || p.paid_enabled">
-                    <strong x-text="m.label"></strong>
-                    <span class="chip warn" x-show="!m.free" x-cloak style="padding:0 5px;">paid</span>
-                    <span class="faint" x-text="'· ' + m.notes"></span>
-                  </li>
-                </template>
-              </ul>
-            </details>
-          </div>
-        </template>
       </section>
 
       <div class="settings-section-title">

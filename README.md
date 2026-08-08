@@ -2,6 +2,10 @@
 
 Apple Silicon local LLM chat studio, built on [MLX](https://github.com/ml-explore/mlx). Sibling app to **ImageStudio Mac** (FLUX image generation), **VoiceStudio Mac** (text-to-speech), and **MusicStudio Mac**. Same scaffolding, focused on chat.
 
+Chat Studio is intentionally local-only: it has no hosted-model providers, paid API
+catalogs, provider credentials, or cloud fallback router. Hugging Face access is used
+only to download model weights.
+
 Chat Studio replaces juggling LM Studio as a second always-on app: it runs as a background service alongside the rest of the Studio family, with the same install/start/update/reset conventions and an OpenAI-compatible API so existing tooling (Continue.dev, Open WebUI, etc.) can point at it as a drop-in.
 
 ## What it does
@@ -36,7 +40,7 @@ or Download and install automatically. Checks can run daily or weekly at the
 selected maintenance hour; Chat Studio defaults to the family’s staggered 03:00
 slot. Saving reports success only after the LaunchAgent is actually validated.
 
-Keep **Update only while idle** enabled. Active local or cloud conversations,
+Keep **Update only while idle** enabled. Active local conversations,
 response streams, queued/model-loading MLX work, and model downloads defer the
 install without cancelling user work. **Update after current work** creates a
 one-time retry even when the regular mode is Off.
@@ -51,10 +55,12 @@ if the panel enters a Repair/failed state.
 
 ## Model memory management
 
-Chat Studio keeps the current local LLM loaded by default so the next response
-starts quickly. In Settings, **Balanced** releases it after 10 idle minutes,
-**Memory Saver** after 2 minutes, and **Immediate** after each completed local
-response. **Performance** is the default and never unloads automatically.
+Chat Studio can keep the current local LLM loaded so the next response starts
+quickly. In Settings, **Balanced** releases it after 10 idle minutes, **Memory
+Saver** after 2 minutes, and **Immediate** after each completed local response.
+Fresh Macs below 12 GB default to Memory Saver; larger Macs default to Balanced.
+An explicit operator choice still wins, and **Performance** remains available
+when intentionally pinning a model in memory.
 
 The Chat toolbar and Settings both provide **Release Memory / Unload Model**.
 Automatic and manual cleanup wait for active model loading and generation to
@@ -98,7 +104,7 @@ Current version is stored at the project root in [`VERSION`](VERSION).
 
 ### Release rule
 
-Every shipped behavior, API, provider, model-catalog, dependency, launcher,
+Every shipped behavior, API, model-catalog, dependency, launcher,
 integration, or user-visible change must increment the numeric `VERSION` under
 the semantic-versioning policy and add a matching top entry to
 [`CHANGELOG.md`](CHANGELOG.md). The entry must clearly describe what changed,

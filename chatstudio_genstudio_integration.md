@@ -1,6 +1,6 @@
 # ChatStudio → GenStudio Integration Readiness
 
-This document describes the maintained integration boundary for ChatStudio `1.24.1`.
+This document describes the maintained integration boundary for ChatStudio `1.25.0`.
 
 GenStudio remains the public API, global job and attempt authority, routing and retry
 authority, lease/fencing authority, and billing authority. ChatStudio is a local
@@ -26,7 +26,7 @@ Every shipped ChatStudio change must increment the root numeric `VERSION` using 
 existing semantic-versioning policy and add a matching top entry to `CHANGELOG.md`.
 The changelog entry is the single source for the in-app **What's New** panel, so it
 must say what changed, relevant limitations, and verification. This applies to
-executor-contract changes as well as models, providers, dependencies, launchers, and
+executor-contract changes as well as models, dependencies, launchers, and
 user-visible behavior.
 
 ## 1. Local model catalog
@@ -70,9 +70,8 @@ Currently cached and reported loadable by the running service:
 - `mlx-community/gemma-3-4b-it-qat-4bit`
 - `mlx-community/gemma-4-E2B-it-qat-4bit`
 
-Remote provider models are separate from the local catalog. `/v1/models` may expose
-models from configured OpenRouter, NVIDIA NIM, Groq, Cerebras, Gemini, OpenAI,
-Anthropic, and other providers. Those listings are dynamic and are not immutable.
+ChatStudio is local-only. `/v1/models` exposes cached MLX models; direct hosted-provider
+catalogs and credential handling are outside this executor boundary.
 
 ## 2. Immutable revisions
 
@@ -102,8 +101,8 @@ Current local non-streaming result evidence:
 }
 ```
 
-Streaming and cloud-provider results do not yet return equivalent immutable revision
-evidence. GenStudio must qualify those paths separately rather than infer a revision.
+Streaming results do not yet return equivalent immutable revision evidence. GenStudio
+must qualify that path separately rather than infer a revision.
 
 ## 3. Chat and completion API
 
@@ -172,9 +171,8 @@ Local models are loaded automatically when the requested model is cached.
 }
 ```
 
-That verified envelope applies only to local, non-streaming completions. Cloud-provider
-non-streaming responses still return unknown token counts, and streaming responses do
-not yet emit final usage or revision evidence.
+That verified envelope applies only to local, non-streaming completions. Streaming
+responses do not yet emit final usage or revision evidence.
 
 ## 4. Streaming protocol
 
@@ -194,9 +192,6 @@ numbers or executor event IDs, so reconnecting cannot safely resume without poss
 duplication. If Story Studio, Studio Hub, or GenStudio disconnects, it must treat the
 stream as non-resumable; the current ChatStudio stream cannot be reattached or repaired
 from a last-seen event. Retrying requires a new, globally controlled GenStudio attempt.
-
-Uninterrupted/fallback mode also has an internal frontend sentinel named
-`__CHATSTUDIO_META__`. This is not a stable external integration protocol.
 
 ## 5. Structured JSON
 
@@ -236,9 +231,9 @@ Local, non-streaming `/v1/chat/completions` now provides verified token usage:
   silently estimated.
 
 The UI still uses approximate display metrics, the native endpoint does not return the
-same evidence envelope, cloud-provider usage remains unknown, and streaming has no final
-usage event. GenStudio may use verified local non-streaming evidence but must not bill
-from UI estimates or null cloud/streaming usage.
+same evidence envelope, and streaming has no final usage event. GenStudio may use
+verified local non-streaming evidence but must not bill from UI estimates or null
+streaming usage.
 
 ```json
 {
@@ -407,10 +402,6 @@ OpenAI streaming errors are sent as an SSE chunk with `finish_reason: "error"` a
 Common non-stream status behavior includes:
 
 - `409`: local model missing, not cached, or failed to load
-- `401`: missing provider credential
-- `403`: paid provider model not enabled
-- `502`: upstream provider/API failure
-
 GenStudio needs stable error codes, explicit executor state, and no error text mixed
 into assistant content.
 
