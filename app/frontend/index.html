@@ -55,7 +55,7 @@
   <main x-show="tab==='chat'" class="page chatpage" x-cloak>
 
     <!-- engine missing -->
-    <template x-if="!diag.available">
+    <template x-if="diag.checked && !diag.available">
       <div class="chat-engine-state">
         <div class="banner warn">
           <span class="b-ico">⚠️</span>

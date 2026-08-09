@@ -45,7 +45,7 @@ function studio() {
     ramTiers: [8, 16, 24, 32, 48, 64, 128, 256, 512],
 
     // ── chat ──
-    diag: { available: false, error: null, packages: [] },
+    diag: { checked: false, available: false, error: null, packages: [] },
     depInstall: { running: false, result: null },
     chatModels: [],
     currentRepo: null,
@@ -194,10 +194,10 @@ function studio() {
     },
     async refreshDiagnostics() {
       try {
-        this.diag = await (await fetch(`${this.apiBase}/api/chat/diagnostics`)).json();
+        this.diag = { ...(await (await fetch(`${this.apiBase}/api/chat/diagnostics`)).json()), checked: true };
         if (this.diag.app_version) this.appVersion = this.diag.app_version;
       }
-      catch (e) { this.diag = { available: false, error: String(e), packages: [] }; }
+      catch (e) { this.diag = { checked: true, available: false, error: String(e), packages: [] }; }
     },
     async refreshReleaseNotes() {
       try {

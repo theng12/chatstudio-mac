@@ -10,6 +10,19 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.25.2] — 2026-08-09
+
+### Fixed — truthful startup diagnostics
+
+- The Chat view now waits for its MLX diagnostic request before showing an
+  installation warning. Healthy machines no longer flash a false "engine not
+  available" banner during normal page initialization.
+
+### Verification
+
+- Added regression coverage for the checked-versus-unavailable states and
+  verified the rendered startup sequence against a live local service.
+
 ## [1.25.1] — 2026-08-09
 
 ### Fixed — safer history controls and accurate maintenance tests

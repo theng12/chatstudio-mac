@@ -52,3 +52,11 @@ def test_cloud_controls_and_credentials_are_absent_from_product_files():
     assert "/api/providers" not in javascript
     assert "/api/router" not in javascript
     assert "CHATSTUDIO_OPENROUTER_API_KEY" not in environment
+
+
+def test_engine_warning_waits_for_diagnostics():
+    html = (ROOT / "app/frontend/index.html").read_text()
+    javascript = (ROOT / "app/frontend/app.js").read_text()
+
+    assert 'diag: { checked: false, available: false' in javascript
+    assert 'x-if="diag.checked && !diag.available"' in html
