@@ -63,6 +63,8 @@ function studio() {
     sessions: [],
     sessionSearch: "",
     currentSessionId: null,
+    sessionDeleteArmed: null,
+    _sessionDeleteTimer: null,
     showSidebar: window.innerWidth > 700,
 
     // ── transient toast + idle-unload tracking ──
@@ -644,7 +646,17 @@ function studio() {
       await this.refreshSessions();
     },
     async deleteSession(s) {
-      if (!confirm(`Delete "${s.title || 'this chat'}"?`)) return;
+      if (this.sessionDeleteArmed !== s.id) {
+        this.sessionDeleteArmed = s.id;
+        clearTimeout(this._sessionDeleteTimer);
+        this._sessionDeleteTimer = setTimeout(() => {
+          if (this.sessionDeleteArmed === s.id) this.sessionDeleteArmed = null;
+        }, 4000);
+        this.showToast("Click delete again to confirm");
+        return;
+      }
+      clearTimeout(this._sessionDeleteTimer);
+      this.sessionDeleteArmed = null;
       const r = await fetch(`${this.apiBase}/api/sessions/${s.id}`, { method: "DELETE" }).catch(() => {});
       if (!r || !r.ok) { this.showToast("Could not delete chat"); return; }
       if (s.id === this.currentSessionId) { this.currentSessionId = null; this.messages = []; }

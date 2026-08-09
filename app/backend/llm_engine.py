@@ -261,8 +261,8 @@ class LLMManager:
         # client disconnect). Checked each token by the generation loop.
         self._cancel = threading.Event()
         self._busy = threading.Event()
-        # Memory management: when the loaded local model sits unused (e.g. the
-        # user switched to a cloud model), free it after an idle timeout.
+        # Memory management: free a loaded local model after an idle timeout
+        # so another Studio can use the machine's unified memory.
         self._last_used: float = 0.0
         self._last_auto_unload: Optional[dict] = None
         self._consecutive_memory_failures = 0

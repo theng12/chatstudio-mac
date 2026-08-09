@@ -110,7 +110,10 @@
                     <div class="cs-actions">
                       <button class="cs-ic" @click.stop="togglePin(s)" title="Unpin">📌</button>
                       <button class="cs-ic" @click.stop="renameSession(s)" title="Rename">✎</button>
-                      <button class="cs-ic" @click.stop="deleteSession(s)" title="Delete">🗑</button>
+                      <button class="cs-ic" @click.stop="deleteSession(s)"
+                              :title="sessionDeleteArmed===s.id ? 'Confirm delete' : 'Delete'"
+                              :aria-label="sessionDeleteArmed===s.id ? 'Confirm delete' : 'Delete chat'"
+                              x-text="sessionDeleteArmed===s.id ? '✓' : '🗑'"></button>
                     </div>
                   </div>
                 </template>
@@ -126,7 +129,10 @@
                 <div class="cs-actions">
                   <button class="cs-ic cs-pin-off" @click.stop="togglePin(s)" title="Pin">📌</button>
                   <button class="cs-ic" @click.stop="renameSession(s)" title="Rename">✎</button>
-                  <button class="cs-ic" @click.stop="deleteSession(s)" title="Delete">🗑</button>
+                  <button class="cs-ic" @click.stop="deleteSession(s)"
+                          :title="sessionDeleteArmed===s.id ? 'Confirm delete' : 'Delete'"
+                          :aria-label="sessionDeleteArmed===s.id ? 'Confirm delete' : 'Delete chat'"
+                          x-text="sessionDeleteArmed===s.id ? '✓' : '🗑'"></button>
                 </div>
               </div>
             </template>

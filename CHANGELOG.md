@@ -10,6 +10,27 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.25.1] — 2026-08-09
+
+### Fixed — safer history controls and accurate maintenance tests
+
+- Replaced the browser-native conversation delete dialog with an accessible
+  two-click confirmation that works reliably inside Pinokio's embedded view.
+- Corrected copied Voice Studio identities, service labels, port, and schedule
+  defaults in the auto-update tests so they now exercise Chat Studio's actual
+  release contract.
+- Declared the directly imported Pydantic and Starlette packages explicitly
+  instead of relying on FastAPI to install them transitively.
+- Removed the last stale cloud-provider wording from the local model engine.
+
+### Verification
+
+- Confirmed the live MLX diagnostic and cached-model APIs report the installed
+  generation stack correctly; the temporary install banner disappears after
+  initialization.
+- Passed JavaScript syntax checking, Python compilation, dependency checks,
+  the full Chat Studio test suite, and rendered UI checks.
+
 ## [1.25.0] — 2026-08-09
 
 ### Changed — Chat Studio is local-only
