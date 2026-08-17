@@ -17,6 +17,34 @@ MoE (Mixture-of-Experts) models load ALL experts into memory — the total
 param count determines the RAM floor even though only a subset activates per
 token. Their size_gb is the verified repository total; their memory floor
 reflects the full checkpoint, not only the active experts.
+
+How `min_unified_memory_gb` is derived
+--------------------------------------
+It is a *machine* RAM tier, but the number that actually constrains a load is
+the GPU working set, not total RAM. macOS gives Metal roughly 66.67% of unified
+memory by default (`iogpu.wired_limit_mb = 0`); a 16 GB M4 Mac mini reports a
+"maximum recommended working set size" of 10922 MB, which is exactly two thirds
+of 16 GiB. So the usable budget in decimal GB is about `tier * 0.716`:
+
+    8 GB → 5.7    16 GB → 11.4    24 GB → 17.2
+    32 GB → 22.9    36 GB → 25.8   48 GB → 34.4    64 GB → 45.8    96 GB → 68.7
+
+Entries corrected in 1.25.3 use:
+
+    weights (size_gb) + KV cache at 32K context + 0.8 GB runtime overhead
+        <= 0.6667 * tier
+
+The KV term is computed from each repo's own `config.json` — layer count, KV
+head count, head dim, and the sliding/full/linear attention pattern — at fp16,
+which is what this app uses (the engine sets no `kv_bits` and no `max_kv_size`,
+so the cache is unquantized and unbounded). It varies enormously between
+architectures at the same parameter count: Gemma 4 interleaves short-window
+sliding layers with a few global ones and costs 1.6-2.5 GB at 32K, while
+Phi-3.5-mini has no grouped-query attention at all and costs 12.9 GB.
+
+Older entries predate this derivation and were sized from the file size alone,
+against *total* RAM rather than the GPU budget — so they read optimistic. They
+are left as-is pending measurement on real hardware; see CHANGELOG 1.25.3.
 """
 from __future__ import annotations
 
@@ -49,7 +77,16 @@ FAMILIES: dict[str, Family] = {
             "small, and good enough for most everyday tasks. Step up to 8B "
             "for better reasoning, or Scout / 70B on high-RAM Macs."
         ),
-        context_note="Llama models support long context windows (128K for 3.x, up to 1M for 4 Scout); actual usable context depends on available unified memory.",
+        context_note=(
+            "Llama models support long context windows (128K for 3.x, up to 1M "
+            "for 4 Scout); actual usable context depends on available unified "
+            "memory. Licence check: every Llama here is under the Llama "
+            "Community Licence, not an open-source licence. Commercial use is "
+            "allowed below 700 million monthly active users, and any product "
+            "built on one must be attributed with \"Built with Llama\". Pick a "
+            "Qwen, Mistral, or Gemma model instead if you would rather not "
+            "carry that obligation."
+        ),
     ),
     "qwen": Family(
         id="qwen",
@@ -101,6 +138,23 @@ FAMILIES: dict[str, Family] = {
         ),
         context_note="Qwen3.5 supports up to a 256K context window upstream; actual usable context depends on available unified memory. Image input requires mlx-vlm.",
     ),
+    "qwen3.8": Family(
+        id="qwen3.8",
+        label="Qwen3.8",
+        summary=(
+            "Alibaba's Qwen3.8 (August 2026) — the newest Qwen generation, "
+            "Apache-2.0 and quantized to MLX by mlx-community. Built on the "
+            "Qwen3.5 architecture with three linear-attention layers per full "
+            "attention layer, which keeps working memory low even at long "
+            "context."
+        ),
+        how_to_use=(
+            "Only the dense 27B is published at a size worth running locally. "
+            "It needs a 32 GB Mac; on 24 GB, Gemma 4 26B A4B is the better fit "
+            "for the same kind of work."
+        ),
+        context_note="Qwen3.8 supports up to a 256K context window upstream; actual usable context depends on available unified memory.",
+    ),
     "mistral": Family(
         id="mistral",
         label="Mistral",
@@ -137,17 +191,21 @@ FAMILIES: dict[str, Family] = {
         label="Gemma 4",
         summary=(
             "Google's Gemma 4 (April 2026) — their most capable open-weight "
-            "models to date, natively multimodal and Apache-2.0 licensed. "
-            "Includes ultra-efficient MatFormer 'E' variants (E2B / E4B), a 26B "
-            "Mixture-of-Experts that activates only ~4B params per token, and a "
-            "dense 31B. All entries here are the QAT (quantization-aware "
-            "trained) 4-bit builds, which keep close to full-precision quality."
+            "models to date, and the most memory-frugal family here at long "
+            "context: five short-window sliding layers per global layer means "
+            "the working memory barely grows as the conversation does. Includes "
+            "MatFormer 'E' variants (E2B / E4B), a 26B Mixture-of-Experts that "
+            "activates only ~4B params per token, and a dense 31B. Each size "
+            "ships twice: a plain 4-bit build and a larger QAT build."
         ),
         how_to_use=(
-            "Start with E2B or E4B — the MatFormer 'effective' variants give "
-            "strong quality for their speed. Step up to 12B or the 26B MoE for "
-            "deeper reasoning if you have the memory, or the dense 31B on a "
-            "high-RAM Mac. Pick a size whose fit chip is green for your machine."
+            "Two builds per size. The plain 4-bit is uniformly quantized and "
+            "smaller — pick it to fit a size onto a machine that couldn't "
+            "otherwise hold it. The QAT build keeps its quantization-sensitive "
+            "layers at 8-bit, so it is 1.2-1.6x larger but closer to "
+            "full-precision quality — pick it when the size already fits with "
+            "room to spare. Start at E2B/E4B, step up to 12B, then the 26B MoE. "
+            "Pick a size whose fit chip is green for your machine."
         ),
         context_note=(
             "Gemma 4 supports very long context upstream (up to 256K on some "
@@ -228,8 +286,8 @@ FAMILIES: dict[str, Family] = {
         label="Devstral",
         summary=(
             "Devstral Small 2 (late 2025) — a 24B instruction-tuned model "
-            "from Devstral AI, quantized to MLX by mlx-community. Strong "
-            "general-purpose quality competitive with much larger models."
+            "from Mistral AI, quantized to MLX by mlx-community. Apache-2.0. "
+            "Strong general-purpose quality competitive with much larger models."
         ),
         how_to_use=(
             "A great pick for 24 GB+ Macs when you want near-frontier "
@@ -243,33 +301,41 @@ FAMILIES: dict[str, Family] = {
         id="lfm",
         label="LFM",
         summary=(
-            "LFM 2.5 (Li Fei-Fei Lab, Stanford) — a tiny 1.2B instruction-"
-            "tuned model that punches well above its weight class, quantized "
-            "to MLX by mlx-community."
+            "LFM 2.5 (Liquid Foundation Models, from Liquid AI) — a tiny 1.2B "
+            "instruction-tuned model that punches well above its weight class, "
+            "quantized to MLX by mlx-community."
         ),
         how_to_use=(
             "An excellent tiny model for 8 GB Macs. Nearly instant to load, "
             "fast generation, and surprisingly capable reasoning for its "
             "size. A great alternative to Gemma 3 1B and Llama 3.2 1B."
         ),
-        context_note=None,
+        context_note=(
+            "Licence check: released under the LFM Open Licence v1.0, not "
+            "Apache-2.0. Commercial use is free only below roughly $10M annual "
+            "revenue; above that Liquid AI requires a separate agreement. "
+            "Review it before shipping this model inside a paid product."
+        ),
     ),
     "nemotron": Family(
         id="nemotron",
         label="Nemotron",
         summary=(
-            "NVIDIA's Nemotron 3 Nano Omni (2025) — a 30B MoE reasoning "
-            "model that activates only ~3B params per token. Designed for "
-            "efficient step-by-step reasoning on math, science, and logic "
-            "tasks. Quantized to MLX by mlx-community."
+            "NVIDIA's Nemotron 3 Nano family — compact instruction models "
+            "built for high-throughput production work rather than "
+            "conversation. Includes a dense 4B, a 30B MoE that activates only "
+            "~3B params per token, and an Omni reasoning variant that thinks "
+            "step by step. Quantized to MLX by mlx-community."
         ),
         how_to_use=(
-            "Use this for tasks that benefit from explicit reasoning: "
-            "math, science, coding puzzles, multi-step planning. The MoE "
-            "architecture keeps generation fast despite the 30B knowledge "
-            "footprint."
+            "Pick the plain 4B or 30B-A3B for mechanical bulk work — "
+            "extraction, tagging, classification, metadata — where you want a "
+            "short answer and no visible deliberation. Pick the Omni Reasoning "
+            "variant only when you actually want the reasoning chain, on math, "
+            "science, or multi-step planning; it is slower because it writes "
+            "its thinking out."
         ),
-        context_note="Nemotron 3 Nano Omni activates ~3B of its 30B params per token; all 30B are loaded in memory. Supports a 128K context window upstream.",
+        context_note="Released under the NVIDIA Open Model licence — commercial use is permitted. The MoE variants keep all 30B in memory while activating ~3B per token. 128K context upstream.",
     ),
 }
 
@@ -345,8 +411,8 @@ CATALOG: tuple[ModelEntry, ...] = (
         label="Llama 3.3 70B Instruct (4-bit)",
         family="llama",
         size_gb=39.706,
-        min_unified_memory_gb=48,
-        recommended_hardware="48 GB+ (64 GB+ comfortable). The largest Llama in the catalog.",
+        min_unified_memory_gb=64,
+        recommended_hardware="64 GB. Its 39.7 GB of weights overrun a 48 GB Mac's ~34.4 GB GPU budget; even on 64 GB, keep context near 16K because full attention on 80 layers costs ~10.7 GB at 32K.",
         params_b=70,
         quant="4bit",
         best_for="The most capable Llama — top-tier reasoning, writing, and instruction-following. Reserve for high-RAM Macs (48 GB+).",
@@ -384,7 +450,7 @@ CATALOG: tuple[ModelEntry, ...] = (
         recommended_hardware="Any Apple Silicon Mac with 8 GB. Fast load and generation.",
         params_b=3,
         quant="4bit",
-        best_for="The sweet spot tiny Qwen — more capable than 1.5B while fitting any Mac. A strong Llama 3.2 3B alternative with Qwen's multilingual strengths.",
+        best_for="LICENCE WARNING — this is the one model here you cannot sell against: unlike the rest of Qwen2.5, the 3B is released under the Qwen Research Licence, which is non-commercial. Use Qwen2.5 1.5B, Gemma 4 E2B, or Llama 3.2 3B for anything commercial. Otherwise: a capable tiny Qwen with strong multilingual coverage.",
     ),
     ModelEntry(
         repo="mlx-community/Qwen2.5-7B-Instruct-4bit",
@@ -473,12 +539,12 @@ CATALOG: tuple[ModelEntry, ...] = (
         label="Qwen3 Coder 30B-A3B MoE Instruct (4-bit)",
         family="qwen3",
         size_gb=17.197,
-        min_unified_memory_gb=24,
-        recommended_hardware="24 GB+ unified memory. MoE: all 30B in memory, ~3B active per token.",
+        min_unified_memory_gb=32,
+        recommended_hardware="32 GB. Its 17.2 GB of weights exactly fill a 24 GB Mac's GPU budget, leaving nothing for context. MoE: all 30B in memory, ~3B active per token.",
         params_b=30,
         quant="4bit",
         is_coder=True,
-        best_for="A fast MoE code model — activates only ~3B params per token for quick generation while keeping 30B of knowledge loaded. Top-tier code quality on 16 GB+ Macs.",
+        best_for="A fast MoE code model — activates only ~3B params per token for quick generation while keeping 30B of knowledge loaded. Top-tier code quality, but it needs 32 GB; on smaller Macs use Qwen2.5 Coder 14B.",
     ),
 
     # ──────────── Qwen3.5 (Vision-Language) ────────────
@@ -537,12 +603,12 @@ CATALOG: tuple[ModelEntry, ...] = (
         label="Qwen3.5 27B (Vision, MLX 4-bit)",
         family="qwen3.5",
         size_gb=16.081,
-        min_unified_memory_gb=24,
-        recommended_hardware="M-series with 24 GB+ unified memory.",
+        min_unified_memory_gb=32,
+        recommended_hardware="32 GB. 16.1 GB of weights plus ~2.2 GB at 32K overruns a 24 GB Mac's ~17.2 GB GPU budget.",
         params_b=27,
         quant="4bit",
         is_vision=True,
-        best_for="The dense 27B — noticeably stronger image + text reasoning than the 9B. For 24 GB+ Macs that want top vision quality.",
+        best_for="The dense 27B — noticeably stronger image + text reasoning than the 9B. Needs 32 GB; on a 24 GB Mac use Gemma 4 26B A4B instead.",
     ),
     ModelEntry(
         repo="mlx-community/Qwen3.5-35B-A3B-4bit",
@@ -561,12 +627,26 @@ CATALOG: tuple[ModelEntry, ...] = (
         label="Qwen3.5 122B-A10B MoE (Vision, MLX 4-bit)",
         family="qwen3.5",
         size_gb=69.621,
-        min_unified_memory_gb=96,
-        recommended_hardware="96 GB+ unified memory (Mac Studio / high-RAM MacBook Pro). ~10B params active per token.",
+        min_unified_memory_gb=128,
+        recommended_hardware="128 GB. Its 69.6 GB of weights overrun a 96 GB Mac's ~68.7 GB GPU budget. ~10B params active per token.",
         params_b=122,
         quant="4bit",
         is_vision=True,
         best_for="The flagship Qwen3.5 vision MoE — top quality, for very high-RAM Macs. Only ~10B experts fire per token, so generation stays usable despite the size.",
+    ),
+
+    # ──────────── Qwen3.8 (Aug 2026) ────────────
+    ModelEntry(
+        repo="mlx-community/Qwen3.8-27B-4bit",
+        label="Qwen3.8 27B (4-bit)",
+        family="qwen3.8",
+        size_gb=16.081,
+        min_unified_memory_gb=32,
+        recommended_hardware="32 GB. 16.1 GB of weights plus ~2.2 GB at 32K overruns a 24 GB Mac's ~17.2 GB GPU budget.",
+        params_b=27,
+        quant="4bit",
+        is_vision=True,
+        best_for="The newest open Qwen — the strongest general-purpose model here that is still Apache-2.0 and locally runnable. Its linear-attention layers keep long documents cheap, which suits research triage and bulk summarization.",
     ),
 
     # ──────────── Mistral ────────────
@@ -629,18 +709,49 @@ CATALOG: tuple[ModelEntry, ...] = (
         best_for="The larger Ministral — competes with 7B-8B models while being more efficient. Good reasoning, fast generation, Apache-2.0.",
     ),
 
-    # ──────────── Gemma 4 (Apr 2026, QAT 4-bit) ────────────
+    # ──────────── Gemma 4 (Apr 2026) ────────────
+    # Two builds per size. Verified from each repo's config.json:
+    #   plain `-4bit`     → uniform 4-bit, group size 64, no per-layer overrides
+    #   `-qat-4bit`       → same 4-bit base, but 123-183 modules pinned to 8-bit
+    # Same weights, different quantization recipe — hence the size gap (the 12B
+    # is 6.77 GB plain vs 11.02 GB QAT). On the 26B MoE the gap nearly vanishes
+    # (15.37 vs 15.64) because the expert tensors stay 4-bit in both, so there
+    # the QAT build is essentially free quality.
+    ModelEntry(
+        repo="mlx-community/gemma-4-E2B-it-4bit",
+        label="Gemma 4 E2B Instruct (4-bit)",
+        family="gemma4",
+        size_gb=3.583,
+        is_vision=True,
+        min_unified_memory_gb=8,
+        recommended_hardware="Any Apple Silicon Mac with 8 GB. ~3.6 GB weights + ~0.25 GB working memory at 32K context.",
+        params_b=2,
+        quant="4bit",
+        best_for="The smallest Gemma 4 and the one to reach for on an 8 GB Mac. Ideal for high-volume mechanical work — titles, tags, descriptions, tagging and classification passes — where you want throughput rather than depth.",
+    ),
     ModelEntry(
         repo="mlx-community/gemma-4-E2B-it-qat-4bit",
         label="Gemma 4 E2B Instruct (QAT 4-bit)",
         family="gemma4",
         size_gb=4.362,
         is_vision=True,
-        min_unified_memory_gb=12,
-        recommended_hardware="16 GB recommended; runs on less but tight.",
+        min_unified_memory_gb=8,
+        recommended_hardware="8 GB fits but with little to spare (~5.4 GB of the ~5.7 GB GPU budget); 16 GB comfortable.",
         params_b=2,
         quant="4bit QAT",
-        best_for="The smallest, fastest Gemma 4. A MatFormer 'effective-2B' build that punches above its weight — a great default Gemma 4 to try first on most Macs.",
+        best_for="The higher-quality E2B build — sensitive layers kept at 8-bit. Worth the extra 0.8 GB over the plain 4-bit if you have 16 GB; on 8 GB take the plain build instead.",
+    ),
+    ModelEntry(
+        repo="mlx-community/gemma-4-E4B-it-4bit",
+        label="Gemma 4 E4B Instruct (4-bit)",
+        family="gemma4",
+        size_gb=5.179,
+        is_vision=True,
+        min_unified_memory_gb=16,
+        recommended_hardware="16 GB. Too large for an 8 GB Mac's ~5.7 GB GPU budget once working memory is counted.",
+        params_b=4,
+        quant="4bit",
+        best_for="The smaller of the two E4B builds — noticeably stronger than E2B at bulk metadata, summarization, and prompt expansion, and still quick. A good default on a 16 GB machine.",
     ),
     ModelEntry(
         repo="mlx-community/gemma-4-E4B-it-qat-4bit",
@@ -652,7 +763,19 @@ CATALOG: tuple[ModelEntry, ...] = (
         recommended_hardware="16 GB+ recommended for comfortable headroom.",
         params_b=4,
         quant="4bit QAT",
-        best_for="The larger MatFormer 'effective-4B' build — noticeably stronger than E2B while staying friendly to 16 GB Macs. A solid everyday Gemma 4 pick.",
+        best_for="The higher-quality E4B build. On a 16 GB Mac this is the best quality-per-GB Gemma 4 that still leaves room for other apps.",
+    ),
+    ModelEntry(
+        repo="mlx-community/gemma-4-12B-it-4bit",
+        label="Gemma 4 12B Instruct (4-bit)",
+        family="gemma4",
+        size_gb=6.773,
+        is_vision=True,
+        min_unified_memory_gb=16,
+        recommended_hardware="16 GB. Uniform 4-bit, so a dense 12B fits where the 11 GB QAT build cannot.",
+        params_b=12,
+        quant="4bit",
+        best_for="A dense 12B on a 16 GB Mac — the biggest quality jump available at that memory tier. The right pick for bulk work that needs real comprehension: research triage, classification with nuance, rewriting descriptions at volume.",
     ),
     ModelEntry(
         repo="mlx-community/gemma-4-12B-it-qat-4bit",
@@ -661,10 +784,22 @@ CATALOG: tuple[ModelEntry, ...] = (
         size_gb=11.020,
         is_vision=True,
         min_unified_memory_gb=24,
-        recommended_hardware="24 GB+ unified memory recommended.",
+        recommended_hardware="24 GB. Needs ~14.3 GB of the ~17.2 GB GPU budget at 32K context.",
         params_b=12,
         quant="4bit QAT",
-        best_for="A dense 12B with strong reasoning. Step up here from the E-variants when you want more depth and have 24 GB+ to work with.",
+        best_for="The best-quality dense 12B. On a 24 GB Mac this is the comfortable everyday choice — full headroom, no context juggling. Step down to the plain 4-bit build for a 16 GB machine.",
+    ),
+    ModelEntry(
+        repo="mlx-community/gemma-4-26b-a4b-it-4bit",
+        label="Gemma 4 26B A4B MoE Instruct (4-bit)",
+        family="gemma4",
+        size_gb=15.374,
+        is_vision=True,
+        min_unified_memory_gb=24,
+        recommended_hardware="24 GB, and it fills the default GPU budget: ~17.7 GB needed at 32K vs ~17.2 GB available. Keep context at or below 16K, or raise iogpu.wired_limit_mb.",
+        params_b=26,
+        quant="4bit",
+        best_for="The best-shaped model for a 24 GB Mac — 26B of knowledge with only ~4B firing per token, so it answers at closer to 4B speed. Excellent for high-volume metadata and classification where you want quality without waiting.",
     ),
     ModelEntry(
         repo="mlx-community/gemma-4-26B-A4B-it-qat-4bit",
@@ -672,11 +807,23 @@ CATALOG: tuple[ModelEntry, ...] = (
         family="gemma4",
         size_gb=15.641,
         is_vision=True,
-        min_unified_memory_gb=32,
-        recommended_hardware="32 GB+ recommended. MoE: all 26B in memory, ~4B active per token.",
+        min_unified_memory_gb=24,
+        recommended_hardware="24 GB, same tight fit as the plain build (only 0.27 GB larger). Keep context at or below 16K, or raise iogpu.wired_limit_mb.",
         params_b=26,
         quant="4bit QAT",
-        best_for="MoE sweet spot — near-large-model quality at closer-to-small-model speed. Pick this on a 32 GB+ Mac for quality without the 31B's slowdown.",
+        best_for="Same MoE as the plain 4-bit build but with its sensitive layers at 8-bit for almost no extra size — on this model the QAT build is close to free, so prefer it over the plain one.",
+    ),
+    ModelEntry(
+        repo="mlx-community/gemma-4-31B-it-4bit",
+        label="Gemma 4 31B Instruct (4-bit)",
+        family="gemma4",
+        size_gb=18.444,
+        is_vision=True,
+        min_unified_memory_gb=36,
+        recommended_hardware="36 GB+. Its 16 KV heads make working memory expensive — ~6.2 GB at 32K, the priciest in the Gemma 4 family.",
+        params_b=31,
+        quant="4bit",
+        best_for="The dense 31B in its smaller uniform-4-bit form. Pick this over the QAT build unless you have 64 GB — it is 10 GB lighter for a modest quality cost.",
     ),
     ModelEntry(
         repo="mlx-community/gemma-4-31B-it-qat-4bit",
@@ -684,11 +831,11 @@ CATALOG: tuple[ModelEntry, ...] = (
         family="gemma4",
         size_gb=28.849,
         is_vision=True,
-        min_unified_memory_gb=48,
-        recommended_hardware="48 GB+ (64 GB comfortable). The most capable model in the catalog.",
+        min_unified_memory_gb=64,
+        recommended_hardware="64 GB. 28.8 GB of weights plus ~6.2 GB at 32K exceeds a 48 GB Mac's ~34.4 GB GPU budget.",
         params_b=31,
         quant="4bit QAT",
-        best_for="The most capable Gemma 4 — a dense 31B for the hardest reasoning and writing tasks. Reserve for high-RAM Macs (48 GB+).",
+        best_for="The most capable Gemma 4 — a dense 31B for the hardest reasoning and writing tasks. Reserve for 64 GB Macs.",
     ),
 
     # ──────────── Gemma 3 (2025, QAT 4-bit) ────────────
@@ -746,10 +893,10 @@ CATALOG: tuple[ModelEntry, ...] = (
         family="phi",
         size_gb=2.152,
         min_unified_memory_gb=8,
-        recommended_hardware="Any Apple Silicon Mac with 8 GB.",
+        recommended_hardware="8 GB for short prompts only. This model has no grouped-query attention (32 KV heads), so its working memory grows about four times faster than any other model here — roughly 3.2 GB at 8K context and 12.9 GB at 32K, on top of the weights. Long documents will exhaust an 8 GB Mac.",
         params_b=3.8,
         quant="4bit",
-        best_for="Tiny footprint with surprisingly capable reasoning. Pick on memory-constrained Macs when Llama 3.2 3B isn't quite cutting it on reasoning-heavy prompts.",
+        best_for="Tiny footprint with surprisingly capable reasoning, but strictly a short-prompt model — see the hardware note before feeding it anything long. Phi-4 Mini is the same size, is newer, and handles context four times more cheaply; prefer it unless you specifically want Phi-3.5.",
     ),
 
     # ──────────── Phi-4 ────────────
@@ -812,7 +959,7 @@ CATALOG: tuple[ModelEntry, ...] = (
         params_b=16,
         quant="4bit",
         is_coder=True,
-        best_for="DeepSeek's dedicated code model — strong on complex programming tasks, code review, and refactoring. For 16 GB+ Macs.",
+        best_for="DeepSeek's dedicated code model — strong on complex programming tasks, code review, and refactoring. For 16 GB+ Macs. Licence check: the DeepSeek Model Licence permits commercial use but attaches a list of prohibited use cases; read it before shipping.",
     ),
 
     # ──────────── Devstral ────────────
@@ -841,18 +988,40 @@ CATALOG: tuple[ModelEntry, ...] = (
         best_for="A tiny model from Li Fei-Fei's lab that punches well above its weight. Near-instant load, fast generation — a great alternative to Gemma 3 1B on any Mac.",
     ),
 
-    # ──────────── Nemotron (reasoning) ────────────
+    # ──────────── Nemotron ────────────
+    ModelEntry(
+        repo="mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit",
+        label="Nemotron 3 Nano 4B (4-bit)",
+        family="nemotron",
+        size_gb=2.254,
+        min_unified_memory_gb=16,
+        recommended_hardware="16 GB. Weights are tiny (2.3 GB) but it has no sliding-window attention, so 32K of context costs ~5.6 GB on its own.",
+        params_b=4,
+        quant="4bit",
+        best_for="Built for mechanical bulk work — short, literal answers for extraction, tagging, classification, and metadata at volume. Keep prompts short and it is one of the fastest useful models here; it is not a conversationalist.",
+    ),
+    ModelEntry(
+        repo="mlx-community/NVIDIA-Nemotron-3-Nano-30B-A3B-4bit",
+        label="Nemotron 3 Nano 30B-A3B MoE (4-bit)",
+        family="nemotron",
+        size_gb=17.793,
+        min_unified_memory_gb=32,
+        recommended_hardware="32 GB. The 17.8 GB of weights alone exceed a 24 GB Mac's ~17.2 GB GPU budget.",
+        params_b=30,
+        quant="4bit",
+        best_for="The bulk-work workhorse of the family — 30B of knowledge, ~3B active per token, and only 2 KV heads so long documents stay cheap. Use it for high-volume triage and summarization on a 32 GB+ Mac.",
+    ),
     ModelEntry(
         repo="mlx-community/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-4bit",
         label="Nemotron 3 Nano Omni 30B-A3B Reasoning (4-bit)",
         family="nemotron",
         size_gb=19.651,
-        min_unified_memory_gb=24,
-        recommended_hardware="16 GB+ recommended. MoE: all 30B in memory, ~3B active per token.",
+        min_unified_memory_gb=32,
+        recommended_hardware="32 GB. The largest Nemotron here at 19.7 GB — the weights alone exceed a 24 GB Mac's ~17.2 GB GPU budget. MoE: all 30B in memory, ~3B active per token.",
         params_b=30,
         quant="4bit",
         is_reasoning=True,
-        best_for="NVIDIA's efficient reasoning MoE — activates ~3B of 30B params per token for fast step-by-step thinking. Excellent for math, science, and logic on 16 GB+ Macs.",
+        best_for="NVIDIA's reasoning MoE — activates ~3B of 30B params per token and writes out its thinking before answering. Excellent for math, science, and logic; for high-volume mechanical work take the plain 30B-A3B instead, which is smaller and does not spend tokens deliberating.",
     ),
 )
 

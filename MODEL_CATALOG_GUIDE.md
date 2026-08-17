@@ -55,13 +55,67 @@ Field rules:
 - `label` names the generation, parameter size, tuning, and quantization. Do not repeat promotional prose.
 - `family` must match an existing `FAMILIES` key.
 - `size_gb` is decimal GB and is approximate until downloaded.
-- `min_unified_memory_gb` is the practical loading floor, not the model file size.
+- `min_unified_memory_gb` is the practical loading floor, not the model file size. See "Deriving the memory floor" below.
 - `params_b` is total parameters loaded into memory. For MoE models, use total parameters, not active parameters.
 - `quant` uses compact values such as `4bit`, `8bit`, or `bf16`.
 - `best_for` explains the decision in user language.
 - Set specialty flags only when the model is deliberately positioned for that role. A variant can be `is_coder` or `is_reasoning`; `is_starter` should be rare.
 
 Keep variants from the same lineage together in `CATALOG`. The UI preserves catalog order by default and creates family panels automatically.
+
+## Deriving The Memory Floor
+
+`min_unified_memory_gb` names a machine RAM tier, but the number that actually
+decides whether a load succeeds is the GPU working set. macOS gives Metal about
+66.67% of unified memory by default (`iogpu.wired_limit_mb = 0`) — a 16 GB M4
+Mac mini reports a maximum recommended working set of 10922 MB, exactly two
+thirds of 16 GiB. Sizing against total RAM makes every floor optimistic by a
+third.
+
+Use:
+
+```
+weights (size_gb) + KV cache at 32K context + 0.8 GB runtime overhead
+    <= 0.6667 * tier
+```
+
+Usable budget in decimal GB is roughly `tier * 0.716`:
+
+| tier | 8 | 16 | 24 | 32 | 36 | 48 | 64 | 96 | 128 |
+|---|---|---|---|---|---|---|---|---|---|
+| budget GB | 5.7 | 11.4 | 17.2 | 22.9 | 25.8 | 34.4 | 45.8 | 68.7 | 91.6 |
+
+Compute the KV term from the repository's own `config.json` rather than from
+parameter count — it varies by an order of magnitude between architectures of
+the same size. Read `num_hidden_layers`, `num_key_value_heads`, `head_dim`, and
+the attention layout, then take 2 bytes per element for fp16 (this app sets no
+`kv_bits` and no `max_kv_size`, so the cache is unquantized and unbounded):
+
+- `layer_types` present — count `full_attention` layers at the full 32K,
+  `sliding_attention` layers at `min(sliding_window, 32K)`, and treat
+  `linear_attention` layers as a small constant. This is Gemma 4 and Qwen3.5+.
+- `sliding_window_pattern: N` — one global layer every N. This is Gemma 3.
+- `use_sliding_window: false` — ignore `sliding_window`, it is full attention.
+  This is Qwen2.5 and the DeepSeek R1 distills.
+- Otherwise full attention on every layer.
+
+Worked examples: Gemma 4 26B A4B costs 1.6 GB at 32K, while Phi-3.5-mini — same
+era, a fifth the parameters, but 32 KV heads and no grouped-query attention —
+costs 12.9 GB.
+
+`test_catalog.py` enforces two invariants: an entry's weights must fit inside
+the GPU budget of its declared floor, and no entry may claim a lower floor than
+a smaller sibling in the same family.
+
+## Licences Have No Field
+
+`ModelEntry` has no licence field, and this guide does not add one. Several
+catalogued models carry terms that matter to anyone selling a product — a
+non-commercial research licence, a monthly-active-user cap, a revenue cap, a
+mandatory attribution string. Until a field exists, state the constraint in
+plain language in `best_for` for a single entry, or in the family's
+`context_note` when it applies to the whole lineage. Do not leave a restricted
+licence unlabelled.
 
 ## Hugging Face Discovery
 

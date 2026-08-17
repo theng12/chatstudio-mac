@@ -10,6 +10,67 @@ Versioning follows [Semantic Versioning](https://semver.org/) with this project-
 
 ---
 
+## [1.25.3] — 2026-08-17
+
+### Fixed — Gemma 4 memory floors no longer hide the models that fit
+
+- `min_unified_memory_gb` is now derived from the constraint that actually
+  binds a load: macOS reserves only about 66.67% of unified memory for the GPU
+  by default, so a 24 GB Mac has roughly a 17.2 GB working budget, not 24 GB.
+  Corrected entries use `weights + KV cache at 32K + 0.8 GB` against that
+  budget, with the KV term computed from each repository's own `config.json`.
+- Gemma 4 26B A4B dropped from a 32 GB floor to 24 GB. It was the best-shaped
+  model for a 24 GB machine and the catalog was reporting it as out of reach.
+- Gemma 4 E2B dropped from 12 GB to 8 GB. Gemma 4 31B QAT rose from 48 GB to
+  64 GB, and Qwen3.5 27B from 24 GB to 32 GB — both were unloadable at their
+  old floors once the GPU budget is accounted for.
+- Nemotron 3 Nano Omni rose from 24 GB to 32 GB; its 19.7 GB of weights alone
+  overran a 24 GB Mac's budget, and its hardware note contradicted its floor.
+- Three further entries declared floors whose GPU budget could not even hold
+  the weights, so they could never have loaded on the machine the catalog
+  pointed at: Llama 3.3 70B (48 → 64 GB), Qwen3 Coder 30B-A3B (24 → 32 GB), and
+  Qwen3.5 122B-A10B (96 → 128 GB). A new test now rejects this class of entry.
+
+### Added — smaller Gemma 4 builds, Qwen3.8, and Nemotron for bulk work
+
+- Every Gemma 4 size now offers both builds. The plain `-4bit` repositories are
+  uniformly quantized and smaller; the `-qat-4bit` repositories pin 123-183
+  modules to 8-bit for higher quality. Both are real and both load — they serve
+  different memory tiers, so the catalog now names the trade-off instead of
+  presenting only the larger one.
+- Gemma 4 12B (4-bit) at 6.8 GB brings a dense 12B within reach of a 16 GB Mac,
+  where the 11.0 GB QAT build could not fit.
+- Added Qwen3.8 27B (Apache-2.0, released 14 August 2026) as a new family, and
+  Nemotron 3 Nano 4B and 30B-A3B — the non-reasoning builds intended for
+  high-volume mechanical work rather than visible deliberation.
+
+### Safety — licence hazards surfaced at the point of choice
+
+- Qwen2.5 3B is under the non-commercial Qwen Research Licence, unlike the rest
+  of Qwen2.5. It is now labelled as unusable in a commercial product.
+- Llama entries now state the Llama Community Licence's 700M monthly-active-user
+  cap and its mandatory "Built with Llama" attribution.
+- LFM 2.5 now states that free commercial use stops at roughly $10M revenue.
+- DeepSeek Coder V2 Lite now notes its prohibited-use appendix.
+
+### Changed — catalog copy matches how these models are actually used
+
+- Gemma 4, Nemotron, and the new entries describe mechanical high-volume work —
+  metadata, classification, prompt expansion, triage — rather than implying
+  they replace a frontier model for long-form creative writing.
+- Phi-3.5 Mini now warns that it has no grouped-query attention, so its working
+  memory grows roughly four times faster than any other model here.
+- Corrected two wrong attributions: LFM is from Liquid AI, not "Li Fei-Fei Lab,
+  Stanford", and Devstral is from Mistral AI, not "Devstral AI".
+
+### Verification
+
+- All 46 pre-existing catalog repositories were confirmed to exist on Hugging
+  Face and every `size_gb` matched the API byte total exactly. Every added
+  repository was verified the same way before being catalogued.
+- No model weights were downloaded; sizes, quantization recipes, and attention
+  layouts were read from Hugging Face metadata and `config.json` only.
+
 ## [1.25.2] — 2026-08-09
 
 ### Fixed — truthful startup diagnostics
